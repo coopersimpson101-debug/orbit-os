@@ -1,0 +1,46 @@
+name: Bug report
+description: Something builds, runs or computes incorrectly
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you expected, and what you got instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands, starting from a clean checkout.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Full output / logs
+      render: text
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - boot / EL2->EL1
+        - chainloader
+        - MMU / memory
+        - interrupts / timer
+        - scheduler / sync
+        - user mode / syscalls
+        - shell
+        - build / CI
+        - Raspberry Pi 5 hardware
+        - docs
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      placeholder: "Board (QEMU virt / Pi 5 + firmware version) or QEMU version, toolchain (zig or gcc version), host OS"
+    validations:
+      required: true

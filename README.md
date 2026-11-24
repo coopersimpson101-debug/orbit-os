@@ -1,45 +1,61 @@
-# OrbitOS
+<p align="center">
+  <img src="docs/assets/banner.svg" alt="OrbitOS: an AArch64 kernel for the Raspberry Pi 5" width="100%">
+</p>
 
-**A hobby AArch64 kernel for the Raspberry Pi 5, and the foundation for a
-phone and smartwatch OS of our own.**
+<p align="center">
+  <a href="https://github.com/coopersimpson101-debug/orbit-os/actions/workflows/ci.yml"><img src="https://github.com/coopersimpson101-debug/orbit-os/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
+  <img src="https://img.shields.io/badge/language-C%20%2B%20AArch64%20asm-22D3EE.svg" alt="C and AArch64 assembly">
+  <img src="https://img.shields.io/badge/target-Raspberry%20Pi%205%20%C2%B7%20QEMU%20virt-informational.svg" alt="Raspberry Pi 5 and QEMU virt">
+  <img src="https://img.shields.io/badge/dependencies-none%20(freestanding)-success.svg" alt="freestanding, no dependencies">
+</p>
 
-Phones and watches run on the same kind of hardware: ARMv8 cores, a GIC, a
-generic timer, a PL011-class UART for bring-up, and very little else that you
-can count on being the same. OrbitOS builds that common base first, on a board
-you can buy and probe (the Pi 5) and on an emulator that CI can boot on every
-commit (QEMU `virt`). It includes a bootloader, memory management, a preemptive
-scheduler with user mode, and a shell. Displays, touch input, radios and power
-management for wearables are added on top of that base, one roadmap item at a time.
+**A from-scratch AArch64 kernel for the Raspberry Pi 5 - and the foundation for a
+phone and smartwatch OS of our own.** Phones and watches share the same core
+hardware (ARMv8 cores, a GIC, a generic timer, a PL011-class UART); OrbitOS builds
+that common base first, on a board you can buy and probe and on an emulator that CI
+boots on every commit.
 
-> **Honest status:** OrbitOS builds for both boards and passes host unit tests
-> and an emulated boot locally. QEMU boot tests are set up in CI. **It has not
-> yet been booted on a real Raspberry Pi 5.** See
-> [Status](#status) and [docs/hardware-validation.md](docs/hardware-validation.md).
+<p align="center">
+  <a href="#quick-start">Quickstart</a> ·
+  <a href="#architecture">How it works</a> ·
+  <a href="#status">Results</a> ·
+  <a href="#roadmap-from-kernel-to-phone-and-watch-os">Roadmap</a>
+</p>
 
-```
-OrbitOS v0.1.0 (qemu-virt) - hobby AArch64 kernel
-[boot] entered at EL1, now at EL1, dtb=0x48000000, image 0x40080000-0x400cd000
-[fdt] device tree at 0x48000000, 728 bytes
-[mmu] enabled: identity map + kernel sections at 4K, devices nGnRE, 9 tables
-[mm] buddy: 130834 pages free (511 MiB) at [0x400ed000, 0x60000000), 1 reserved range(s)
-[mmu] higher-half alias self-test: OK
-[gic] GICv2 at D=0x8000000 C=0x8010000, 256 interrupt lines
-[timer] 100 Hz tick on INTID 30 (CNTFRQ 62500000 Hz)
-OrbitOS shell - type 'help'
-orbit> spawn user
-[user] hello from EL0, pid 2
-[user] tick 1 (sleep 100 ms via SVC)
-...
-[user] bad pointer correctly rejected with -EFAULT
-[sched] thread 2 (user) exited with code 42
-orbit> spawn ufault
-*** exception: EL0 sync in thread 3 (ufault)
-    ESR_EL1=0x9200000f  EC=0x24 data abort (lower EL): permission fault L3, read
-    -> killing user task 3
-```
-<sub>The transcript above was captured from `tools/uniboot.py` (an emulated boot, see
-[docs/testing.md](docs/testing.md)) and trimmed. Under QEMU with
-`virtualization=on`, the banner reads `entered at EL2, now at EL1`.</sub>
+<p align="center">
+  <img src="docs/assets/terminal.svg" alt="UART console of an emulated OrbitOS boot and shell session" width="90%">
+</p>
+<p align="center"><sub>Real UART output of <code>build/virt/kernel8.img</code> on the Unicorn-based emulator
+(<code>tools/uniboot.py</code>) - <b>emulated, not hardware</b>. Unicorn starts at EL1; under QEMU with
+<code>virtualization=on</code> (CI) the banner reads <code>entered at EL2, now at EL1</code>.
+Regenerate with <code>python docs/assets/make_figures.py</code>.</sub></p>
+
+## Highlights
+
+- **Boots to a shell in ~4.7k lines of C and assembly**, no libc, no third-party code: a 67 KB `kernel8.img` for each board.
+- **Real MMU setup:** 4 KiB granule, 48-bit VA, 4-level tables (9 of them at boot), device/normal memory types, W^X kernel sections (text read-only + executable, data XN), EL0/EL1 split and a higher-half alias in TTBR1.
+- **Preemptive scheduler:** 8 priority levels, 50 ms slices driven by the 100 Hz generic timer, semaphores and mutexes; the `spin` demo proves preemption.
+- **User mode with isolation:** EL0 tasks make SVC syscalls; bad user pointers get `-EFAULT`, and an EL0 fault kills the task, not the kernel.
+- **UART chainloader** with a length + CRC-32 framed protocol, so new kernels can be sent over serial without touching the SD card.
+- **Booted in CI on every push** under QEMU `virt` (direct and chainloaded, entering at EL2) with both zig/LLVM and GNU cross-gcc builds, plus 17 host tests.
+
+## Status
+
+| | what | how it was checked |
+|---|---|---|
+| ✅ | Builds for `virt` and `rpi5` with zig cc / ld.lld, `-Werror` | locally (Windows) and in CI |
+| ✅ | 9 C unit-test programs + image/layout checks (17 pytest tests) | locally and in CI |
+| ✅ | `Makefile` build with GNU `aarch64-linux-gnu-gcc` | CI (`make-gcc` job) |
+| 🧪 | QEMU `virt` boot: direct `-kernel` (EL2→EL1 drop) and via the UART chainloader, full scripted shell session | CI, QEMU (emulated) |
+| 🧪 | Boot, chainloader, EL0, faults and preemption on Unicorn (`tools/uniboot.py`) | locally, approximate machine model |
+| ⏳ | **Raspberry Pi 5 hardware boot** - not yet attempted | [hardware validation checklist](docs/hardware-validation.md) |
+| 🗺️ | GICv3, SMP, per-process address spaces, filesystem, display, input, USB, radios | [roadmap](#roadmap-from-kernel-to-phone-and-watch-os) |
+
+Known limitations: single core. All threads share one address space. Slab
+pages are never returned to the buddy allocator. Strict priorities can starve
+lower levels. On the Pi 5, the PL011 baud rate is left as the firmware set it.
+RAM above the first DTB memory bank and above 4 GiB is ignored.
 
 ## What's in the box
 
@@ -93,6 +109,25 @@ Shell demos (`spawn <name>`):
 
 ## Architecture
 
+Boot flow, as printed on the UART above:
+
+```mermaid
+flowchart TD
+    A["firmware / QEMU<br/>loads kernel8.img, x0 = DTB"] --> B["boot.S<br/>park secondary cores · self-relocate"]
+    B --> C{"EL2?"}
+    C -- yes --> D["drop to EL1<br/>HCR_EL2 · CNTHCTL_EL2 · SPSR"] --> E
+    C -- no --> E["stack · BSS · VBAR_EL1"]
+    E --> F["kernel_main<br/>PL011 console + banner"]
+    F --> G["FDT probe<br/>memory · UART · GIC · timer · PSCI"]
+    G --> H["MMU on<br/>9 tables, TTBR0 identity + TTBR1 alias"]
+    H --> I["buddy allocator + kmalloc"]
+    I --> J["GICv2 + generic timer 100 Hz<br/>UART RX IRQ"]
+    J --> K["scheduler: idle + shell threads"]
+    K --> L(["orbit&gt; shell"])
+```
+
+Component view:
+
 ```mermaid
 flowchart LR
     subgraph Boot
@@ -128,6 +163,21 @@ exception and scheduler design), [docs/memory-map.md](docs/memory-map.md)
 Each milestone keeps CI green on QEMU and gets validated on the Pi 5 before
 the next one starts.
 
+```mermaid
+flowchart LR
+    F["✅ Foundation<br/>boot · MMU · IRQs<br/>scheduler · EL0 · shell"]:::done --> HW["1 · Pi 5<br/>bring-up"]
+    HW --> SMP["2 · SMP"] --> IPC["3 · processes<br/>+ IPC"]
+    IPC --> DSP["4 · display"] & INP["5 · input"] & PWR["6 · power"]
+    IPC --> STO["7 · storage"] --> PCI["8 · PCIe / USB"] --> RF["9 · BLE / Wi-Fi"]
+    DSP & INP & PWR & RF --> APP["10 · app model"] --> PORT(["11 · watch / phone SoC"]):::goal
+    classDef done fill:#0e4f5c,stroke:#22D3EE,color:#e6edf3
+    classDef goal fill:#22D3EE,stroke:#22D3EE,color:#0d1117
+```
+
+<details>
+<summary><b>Milestones in detail</b></summary>
+
+
 1. **Hardware bring-up on Pi 5.** Run through the validation checklist, fix
    whatever real silicon disagrees with, and add D-cache maintenance by set/way.
 2. **SMP.** Bring up the other three A76 cores with PSCI `CPU_ON`, add per-CPU run
@@ -156,23 +206,7 @@ the next one starts.
 11. **Ports.** Move to a dedicated wearable-class SoC once the abstractions above
     have proved themselves on the Pi.
 
-## Status
-
-| Item | State |
-|------|-------|
-| Builds (`python build.py`, zig 0.17 / LLVM) for virt and rpi5 | ✅ verified locally, `-Werror` |
-| C unit tests (9 programs) + pytest (17 tests) | ✅ pass locally |
-| Emulated boot of virt image incl. chainloader, EL0, faults, preemption (`tools/uniboot.py`, Unicorn) | ✅ passes locally. Approximate model, starts at EL1 |
-| QEMU `virt` boot test, direct and chainload (`tools/qemu_test.py`) | ⏳ configured in CI. QEMU was not available on the development machine, so not yet run |
-| `Makefile` with GNU cross-gcc | ⏳ configured in CI, not run locally |
-| EL2→EL1 drop | ⏳ exercised by QEMU `virtualization=on` in CI only |
-| **Raspberry Pi 5 hardware boot** | ❌ **not yet attempted**. See [hardware validation](docs/hardware-validation.md) |
-| GICv3, SMP, per-process address spaces, filesystem, display, USB, radios | roadmap |
-
-Known limitations: single core. All threads share one address space. Slab
-pages are never returned to the buddy allocator. Strict priorities can starve
-lower levels. On the Pi 5, the PL011 baud rate is left as the firmware set it.
-RAM above the first DTB memory bank and above 4 GiB is ignored.
+</details>
 
 ## Repository layout
 

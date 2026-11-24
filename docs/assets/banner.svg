@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="400" viewBox="0 0 1280 400">
+<defs><pattern id="g" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M32 0H0V32" fill="none" stroke="#161b22" stroke-width="1"/></pattern><linearGradient id="fade" x1="0" x2="1"><stop offset="0" stop-color="#0d1117"/><stop offset="1" stop-color="#0d1117" stop-opacity="0"/></linearGradient></defs>
+<rect width="1280" height="400" fill="#0d1117"/><rect width="1280" height="400" fill="url(#g)"/>
+<rect width="640" height="400" fill="url(#fade)"/>
+<rect x="72" y="118" width="56" height="6" rx="3" fill="#22D3EE"/>
+<text x="68" y="210" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="92" font-weight="700" fill="#e6edf3">OrbitOS</text>
+<text x="72" y="258" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="22" fill="#8b949e">An AArch64 kernel for the Raspberry Pi 5</text>
+<text x="72" y="306" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="17" fill="#8b949e">boot <tspan fill="#22D3EE">·</tspan> MMU <tspan fill="#22D3EE">·</tspan> GIC <tspan fill="#22D3EE">·</tspan> scheduler <tspan fill="#22D3EE">·</tspan> EL0 <tspan fill="#22D3EE">·</tspan> shell</text>
+<text x="730.0" y="72.85" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#8b949e">L0</text>
+<text x="878.0" y="72.85" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#8b949e">L1</text>
+<text x="1026.0" y="72.85" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#8b949e">L2</text>
+<text x="1174.0" y="72.85" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#8b949e">L3</text>
+<text x="652" y="137.85" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#22D3EE">TTBR0</text>
+<text x="652" y="270.15" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#22D3EE">TTBR1</text>
+<path d="M1092 160.85C1100.0 160.85 1100.0 160.85 1108 160.85" fill="none" stroke="#22D3EE" stroke-width="1.5" opacity="0.6"/>
+<path d="M944 133.85C952.0 133.85 952.0 106.85 960 106.85" fill="none" stroke="#22D3EE" stroke-width="1.5" opacity="0.6"/>
+<path d="M944 133.85C952.0 133.85 952.0 160.85 960 160.85" fill="none" stroke="#22D3EE" stroke-width="1.5" opacity="0.6"/>
+<path d="M796 133.85C804.0 133.85 804.0 133.85 812 133.85" fill="none" stroke="#22D3EE" stroke-width="1.5" opacity="0.6"/>
+<path d="M944 266.15C952.0 266.15 952.0 239.15 960 239.15" fill="none" stroke="#22D3EE" stroke-width="1.5" opacity="0.6"/>
+<path d="M944 266.15C952.0 266.15 952.0 293.15 960 293.15" fill="none" stroke="#22D3EE" stroke-width="1.5" opacity="0.6"/>
+<path d="M796 266.15C804.0 266.15 804.0 266.15 812 266.15" fill="none" stroke="#22D3EE" stroke-width="1.5" opacity="0.6"/>
+<rect x="960" y="86.85" width="132" height="40" rx="6" fill="#161b22" stroke="#22D3EE" stroke-opacity="0.7"/>
+<text x="968" y="102.85" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#e6edf3">L2 dev 64×2M</text>
+<rect x="968" y="110.85" width="116" height="8" fill="#0b2530"/>
+<rect x="982.50" y="110.85" width="14.50" height="8" fill="#22D3EE"/>
+<rect x="1108" y="140.85" width="132" height="40" rx="6" fill="#161b22" stroke="#22D3EE" stroke-opacity="0.7"/>
+<text x="1116" y="156.85" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#e6edf3">L3 RAM 512×4K</text>
+<rect x="1116" y="164.85" width="116" height="8" fill="#0b2530"/>
+<rect x="1116.00" y="164.85" width="116.00" height="8" fill="#22D3EE"/>
+<rect x="960" y="140.85" width="132" height="40" rx="6" fill="#161b22" stroke="#22D3EE" stroke-opacity="0.7"/>
+<text x="968" y="156.85" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#e6edf3">L2 RAM 255×2M</text>
+<rect x="968" y="164.85" width="116" height="8" fill="#0b2530"/>
+<rect x="968.00" y="164.85" width="58.00" height="8" fill="#22D3EE"/>
+<rect x="812" y="113.85" width="132" height="40" rx="6" fill="#161b22" stroke="#22D3EE" stroke-opacity="0.7"/>
+<text x="820" y="129.85" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#e6edf3">L1  2 tables</text>
+<rect x="820" y="137.85" width="116" height="8" fill="#0b2530"/>
+<rect x="820.00" y="137.85" width="1.20" height="8" fill="#22D3EE"/>
+<rect x="664" y="113.85" width="132" height="40" rx="6" fill="#161b22" stroke="#22D3EE" stroke-opacity="0.7"/>
+<text x="672" y="129.85" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#e6edf3">L0  1 table</text>
+<rect x="672" y="137.85" width="116" height="8" fill="#0b2530"/>
+<rect x="672.00" y="137.85" width="1.20" height="8" fill="#22D3EE"/>
+<rect x="960" y="219.15" width="132" height="40" rx="6" fill="#161b22" stroke="#22D3EE" stroke-opacity="0.7"/>
+<text x="968" y="235.15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#e6edf3">L2 dev 64×2M</text>
+<rect x="968" y="243.15" width="116" height="8" fill="#0b2530"/>
+<rect x="982.50" y="243.15" width="14.50" height="8" fill="#22D3EE"/>
+<rect x="960" y="273.15" width="132" height="40" rx="6" fill="#161b22" stroke="#22D3EE" stroke-opacity="0.7"/>
+<text x="968" y="289.15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#e6edf3">L2 RAM 256×2M</text>
+<rect x="968" y="297.15" width="116" height="8" fill="#0b2530"/>
+<rect x="968.00" y="297.15" width="58.00" height="8" fill="#22D3EE"/>
+<rect x="812" y="246.14999999999998" width="132" height="40" rx="6" fill="#161b22" stroke="#22D3EE" stroke-opacity="0.7"/>
+<text x="820" y="262.15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#e6edf3">L1  2 tables</text>
+<rect x="820" y="270.15" width="116" height="8" fill="#0b2530"/>
+<rect x="820.00" y="270.15" width="1.20" height="8" fill="#22D3EE"/>
+<rect x="664" y="246.14999999999998" width="132" height="40" rx="6" fill="#161b22" stroke="#22D3EE" stroke-opacity="0.7"/>
+<text x="672" y="262.15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#e6edf3">L0  1 table</text>
+<rect x="672" y="270.15" width="116" height="8" fill="#0b2530"/>
+<rect x="672.00" y="270.15" width="1.20" height="8" fill="#22D3EE"/>
+<text x="664" y="345.15" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" fill="#8b949e">the 9 live page tables after boot (emulated), 512 slots each</text>
+</svg>

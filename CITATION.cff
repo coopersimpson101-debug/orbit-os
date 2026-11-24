@@ -1,0 +1,15 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "OrbitOS: a hobby AArch64 kernel for the Raspberry Pi 5"
+abstract: "A from-scratch AArch64 kernel (boot, MMU, GICv2, generic timer, preemptive scheduler, EL0 tasks, UART shell and chainloader) for the Raspberry Pi 5 and QEMU virt, intended as the base for a phone and smartwatch OS."
+authors:
+  - name: "the orbit-os authors"
+license: MIT
+repository-code: "https://github.com/coopersimpson101-debug/orbit-os"
+keywords:
+  - operating-system
+  - kernel
+  - aarch64
+  - raspberry-pi-5
+  - bare-metal
+  - qemu
