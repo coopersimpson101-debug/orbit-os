@@ -1,0 +1,22 @@
+# build output
+/build/
+/build-make/
+*.o
+*.elf
+*.img
+*.dtb
+*.exe
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

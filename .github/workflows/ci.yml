@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    name: zig build, host tests, QEMU virt boot
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install toolchain and QEMU
+        run: |
+          python -m pip install --upgrade pip
+          pip install ziglang pytest pyelftools unicorn
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-arm
+          qemu-system-aarch64 --version
+
+      - name: Build kernel + chainloader (virt, rpi5)
+        run: python build.py
+
+      - name: Host unit tests (pytest + C tests, Unicorn smoke boot)
+        run: python -m pytest -v tests
+
+      - name: QEMU virt boot test (direct -kernel, enters at EL2)
+        run: python tools/qemu_test.py --mode direct
+
+      - name: QEMU virt boot test (UART chainloader over TCP)
+        run: python tools/qemu_test.py --mode chainload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orbit-os-images
+          path: |
+            build/virt/*.img
+            build/virt/*.elf
+            build/rpi5/*.img
+            build/rpi5/*.elf
+
+  make-gcc:
+    name: Makefile build with GNU cross gcc + QEMU boot
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install gcc-aarch64-linux-gnu and QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu qemu-system-arm
+      - name: make
+        run: make CROSS=aarch64-linux-gnu- -j"$(nproc)"
+      - name: Boot the gcc-built virt image
+        run: python3 tools/qemu_test.py --mode direct --build-dir build-make/virt
