@@ -4,6 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/coopersimpson101-debug/orbit-os/actions/workflows/ci.yml"><img src="https://github.com/coopersimpson101-debug/orbit-os/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+[![Release](https://img.shields.io/github/v/release/coopersimpson101-debug/orbit-os?color=22D3EE&label=release)](https://github.com/coopersimpson101-debug/orbit-os/releases/latest)
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
   <img src="https://img.shields.io/badge/language-C%20%2B%20AArch64%20asm-22D3EE.svg" alt="C and AArch64 assembly">
   <img src="https://img.shields.io/badge/target-Raspberry%20Pi%205%20%C2%B7%20QEMU%20virt-informational.svg" alt="Raspberry Pi 5 and QEMU virt">

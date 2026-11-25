@@ -1,0 +1,40 @@
+name: release
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)build a release for"
+        required: true
+permissions:
+  contents: write
+jobs:
+  images:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install ziglang
+      - run: python build.py
+      - name: Pi 5 SD-card bundle
+        run: |
+          mkdir -p dist/orbit-os-rpi5
+          cp build/rpi5/kernel_2712.img build/rpi5/kernel8.img build/rpi5/chainloader.img dist/orbit-os-rpi5/
+          printf 'arm_64bit=1\nkernel=kernel_2712.img\nkernel_address=0x80000\nenable_uart=1\nuart_2ndstage=1\nos_check=0\n' > dist/orbit-os-rpi5/config.txt
+          printf 'Copy these files to the FAT boot partition of a Pi 5 SD card, together with\nbcm2712-rpi-5-b.dtb from github.com/raspberrypi/firmware (boot/).\nSee docs/hardware-validation.md. Not yet verified on real Pi 5 hardware.\n' > dist/orbit-os-rpi5/README.txt
+          (cd dist && zip -r orbit-os-rpi5.zip orbit-os-rpi5)
+          cp build/virt/kernel.elf dist/orbit-os-qemu-virt.elf
+          cp build/rpi5/kernel.elf dist/orbit-os-rpi5.elf
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          body_path: .github/release/${{ github.event.inputs.tag || github.ref_name }}.md
+          fail_on_unmatched_files: true
+          files: |
+            dist/orbit-os-rpi5.zip
+            dist/orbit-os-qemu-virt.elf
+            dist/orbit-os-rpi5.elf
