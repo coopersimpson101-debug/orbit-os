@@ -13,10 +13,10 @@ jobs:
   images:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with: { python-version: "3.12" }
       - run: pip install ziglang
       - run: python build.py
@@ -31,7 +31,7 @@ jobs:
           cp build/rpi5/kernel.elf dist/orbit-os-rpi5.elf
           cp build/rv64/kernel.elf dist/orbit-os-rv64.elf
           cp build/rv64/kernel.bin dist/orbit-os-rv64.bin
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
           body_path: .github/release/${{ github.event.inputs.tag || github.ref_name }}.md
