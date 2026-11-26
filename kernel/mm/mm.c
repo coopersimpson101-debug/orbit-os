@@ -80,9 +80,9 @@ void mm_init(void)
     }
 
     kheap_init(&g_heap, &src);
-    kprintf("[mm] buddy: %lu pages free (%lu MiB) at [%p, %p), %d reserved range(s)\n",
+    kprintf("[mm] buddy: %lu pages free (%lu KiB) at [%p, %p), %d reserved range(s)\n",
             (uint64_t)buddy_free_pages(&g_buddy),
-            (uint64_t)(buddy_free_pages(&g_buddy) * PAGE_SIZE >> 20), (void *)base,
+            (uint64_t)(buddy_free_pages(&g_buddy) * PAGE_SIZE >> 10), (void *)base,
             (void *)ram_end, nrsv);
 }
 

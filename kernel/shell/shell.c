@@ -1,6 +1,7 @@
 /* UART shell: runs as a priority-1 kernel thread. */
 #include "arch.h"
 #include "drivers.h"
+#include "hal.h"
 #include "kernel.h"
 #include "mm.h"
 #include "sched.h"
@@ -58,8 +59,11 @@ static void cmd_mem(int argc, char **argv)
     unsigned o;
     (void)argc;
     (void)argv;
-    kprintf("RAM      : %p - %p (%lu MiB, %s)\n", (void *)plat.ram_base,
-            (void *)(plat.ram_base + plat.ram_size), plat.ram_size >> 20, plat.src_mem);
+    int mib = plat.ram_size >= (1ULL << 20);
+    kprintf("RAM      : %p - %p (%lu %s, %s)\n", (void *)plat.ram_base,
+            (void *)(plat.ram_base + plat.ram_size),
+            mib ? plat.ram_size >> 20 : plat.ram_size >> 10, mib ? "MiB" : "KiB",
+            plat.src_mem);
     kprintf("kernel   : %p - %p (%lu KiB)  text..%p rodata..%p\n", __kernel_start, _end,
             (uint64_t)(_end - __kernel_start) >> 10, __text_end, __rodata_end);
     kprintf("user sec : text %p - %p, stacks %p - %p\n", __user_text_start,
@@ -75,7 +79,7 @@ static void cmd_mem(int argc, char **argv)
             (uint64_t)h->large_pages, (uint64_t)h->allocs, (uint64_t)h->frees,
             (uint64_t)h->failed);
     kprintf("mmu      : %s, %lu page tables, higher-half alias at %p\n",
-            mmu_enabled() ? "on (4K granule, 48-bit VA, 4 levels)" : "off",
+            mmu_enabled() ? MMU_MODE_DESC : "off",
             (uint64_t)mmu_tables_used(), (void *)KERNEL_VA_BASE);
 }
 
@@ -91,7 +95,8 @@ static void cmd_ps(int argc, char **argv)
         if (t->state == T_UNUSED)
             continue;
         kprintf("%-4d %-16s %-5d %-9s %-5s %lu%s\n", t->tid, t->name, t->prio,
-                thread_state_name(t->state), t->is_user ? "EL0" : "EL1", t->cpu_ticks,
+                thread_state_name(t->state), t->is_user ? ARCH_USER_MODE : ARCH_KERNEL_MODE,
+                t->cpu_ticks,
                 t == me ? "  <- you" : "");
     }
 }
@@ -100,18 +105,14 @@ static void cmd_info(int argc, char **argv)
 {
     (void)argc;
     (void)argv;
-    kprintf("board    : %s\n", plat.board);
-    kprintf("uart     : PL011 @ %p, %s, %s\n", (void *)plat.uart_base,
+    if (plat.machine)
+        kprintf("board    : %s (%s)\n", plat.board, plat.machine);
+    else
+        kprintf("board    : %s\n", plat.board);
+    kprintf("arch     : %s\n", ARCH_NAME);
+    kprintf("uart     : %s @ %p, %s, %s\n", uart_name(), (void *)plat.uart_base,
             uart_rx_irq_mode() ? "RX IRQ" : "polled RX", plat.src_uart);
-    kprintf("gic      : GICv2 D=%p C=%p, %u lines (%s)\n", (void *)plat.gicd_base,
-            (void *)plat.gicc_base, gic_num_lines(), plat.src_gic);
-    kprintf("timer    : INTID %d, CNTFRQ %lu Hz\n", plat.timer_irq, cpu_counter_freq());
-    kprintf("psci     : %s (%s)\n",
-            plat.psci == PSCI_SMC ? "smc" : plat.psci == PSCI_HVC ? "hvc" : "none",
-            plat.src_psci);
-    kprintf("dtb      : %p (%u bytes)\n", plat.dtb, plat.dtb_size);
-    kprintf("cpu      : MIDR_EL1=0x%lx MPIDR_EL1=0x%lx\n", read_sysreg(midr_el1),
-            read_sysreg(mpidr_el1));
+    arch_info();
 }
 
 /* peek/poke are guarded: 4-byte aligned, inside mapped RAM or the device
@@ -197,18 +198,18 @@ static void cmd_reboot(int argc, char **argv)
 {
     (void)argc;
     (void)argv;
-    kputs("rebooting via PSCI SYSTEM_RESET...\n");
-    psci_call(PSCI_SYSTEM_RESET, 0, 0, 0);
-    kputs("reboot: PSCI call returned - not supported on this platform\n");
+    kputs("rebooting via " REBOOT_DESC "...\n");
+    system_reboot();
+    kputs("reboot: firmware call returned - not supported on this platform\n");
 }
 
 static void cmd_poweroff(int argc, char **argv)
 {
     (void)argc;
     (void)argv;
-    kputs("powering off via PSCI SYSTEM_OFF...\n");
-    psci_call(PSCI_SYSTEM_OFF, 0, 0, 0);
-    kputs("poweroff: PSCI call returned - not supported on this platform\n");
+    kputs("powering off via " POWEROFF_DESC "...\n");
+    system_poweroff();
+    kputs("poweroff: firmware call returned - not supported on this platform\n");
 }
 
 static const struct cmd cmds[] = {
@@ -222,8 +223,8 @@ static const struct cmd cmds[] = {
     { "peek",     "peek <addr> [n]: read 32-bit words",    cmd_peek },
     { "poke",     "poke <addr> <val>: write a 32-bit word", cmd_poke },
     { "spawn",    "spawn <demo>: start a demo task",       cmd_spawn },
-    { "reboot",   "PSCI SYSTEM_RESET",                     cmd_reboot },
-    { "poweroff", "PSCI SYSTEM_OFF",                       cmd_poweroff },
+    { "reboot",   REBOOT_DESC,                             cmd_reboot },
+    { "poweroff", POWEROFF_DESC,                           cmd_poweroff },
 };
 
 static void cmd_help(int argc, char **argv)

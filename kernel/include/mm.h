@@ -5,12 +5,10 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "buddy.h"
+#include "arch.h"
 #include "kheap.h"
 
-#define KSTACK_ORDER 2 /* 16 KiB kernel stacks */
-
-/* Higher-half linear map of RAM installed in TTBR1_EL1. */
-#define KERNEL_VA_BASE 0xffff000000000000ULL
+/* Higher-half linear alias of RAM at KERNEL_VA_BASE (arch.h). */
 #define phys_to_virt(pa) ((void *)(uintptr_t)((uint64_t)(pa) + KERNEL_VA_BASE))
 #define virt_to_phys(va) ((uint64_t)(uintptr_t)(va) - KERNEL_VA_BASE)
 
@@ -28,7 +26,8 @@ const struct kheap_stats *mm_heap_stats(void);
 void mmu_init(void);
 int  mmu_enabled(void);
 size_t mmu_tables_used(void);
-/* Translate a VA with AT S1E1R. Returns PA or ~0 on fault. */
+/* Translate a VA as a kernel read would (AArch64: AT S1E1R; RV64: a
+ * software Sv39 walk honouring the U bit). Returns PA or ~0 on fault. */
 uint64_t mmu_translate(uint64_t va);
 int mmu_selftest_higher_half(void);
 

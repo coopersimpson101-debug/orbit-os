@@ -1,6 +1,7 @@
-/* EL0 tasks: stack slots, spawning, and the SVC system-call table.
- * ABI: x8 = syscall number, x0..x2 = arguments, x0 = return value
- * (negative errno on failure). */
+/* User tasks: stack slots, spawning, and the system-call table.
+ * ABI (context.h): AArch64 SVC with x8 = number, x0..x2 = arguments;
+ * RV64 ecall with a7 = number, a0..a2 = arguments. The return value goes
+ * back in x0 / a0 (negative errno on failure). */
 #include "arch.h"
 #include "drivers.h"
 #include "kernel.h"
@@ -13,8 +14,8 @@
 #define E_INVAL  22
 #define E_NOSYS  38
 
-/* EL0-accessible stacks live in their own page-aligned section that the
- * MMU maps EL0 read/write, never executable. */
+/* User stacks live in their own page-aligned section that the MMU maps
+ * user read/write, never executable. */
 static uint8_t user_stacks[MAX_USER_TASKS][USER_STACK_SIZE]
     __attribute__((section(".user.stack"), aligned(4096)));
 static int slot_used[MAX_USER_TASKS];
@@ -45,7 +46,8 @@ static void user_thread(void *p)
     uint64_t arg = a->mode == UPROG_FAULT ? (uint64_t)(uintptr_t)&plat : 0;
     t->is_user = 1;
     t->user_slot = a->slot;
-    /* x0 = mode, x1 = arg (for UPROG_FAULT: a kernel address EL0 must not read) */
+    /* arg0 = mode, arg1 = arg (for UPROG_FAULT: a kernel address user mode
+     * must not read) */
     enter_user((uint64_t)(uintptr_t)user_entry, sp, (uint64_t)a->mode, arg,
                (uint64_t)(uintptr_t)t->kstack + KSTACK_SIZE);
 }
@@ -80,26 +82,28 @@ void user_slot_release(int slot)
 
 void syscall_dispatch(struct trapframe *tf)
 {
-    uint64_t nr = tf->x[8];
+    uint64_t nr = tf_sysno(tf), a0 = tf_arg(tf, 0), a1 = tf_arg(tf, 1), a2 = tf_arg(tf, 2);
     int64_t ret;
     struct thread *t = current_thread();
     switch (nr) {
     case SYS_WRITE:
-        if (tf->x[0] != 1 && tf->x[0] != 2)
+        if (a0 != 1 && a0 != 2)
             ret = -E_BADF;
-        else if (!user_range_ok(tf->x[1], tf->x[2]))
+        else if (!user_range_ok(a1, a2))
             ret = -E_FAULT;
         else {
-            console_write((const char *)(uintptr_t)tf->x[1], tf->x[2]);
-            ret = (int64_t)tf->x[2];
+            user_access_begin(); /* RV64: sstatus.SUM, U pages are off-limits otherwise */
+            console_write((const char *)(uintptr_t)a1, a2);
+            user_access_end();
+            ret = (int64_t)a2;
         }
         break;
     case SYS_SLEEP:
-        if (tf->x[0] > 60000) {
+        if (a0 > 60000) {
             ret = -E_INVAL;
             break;
         }
-        thread_sleep_ms(tf->x[0]);
+        thread_sleep_ms(a0);
         ret = 0;
         break;
     case SYS_YIELD:
@@ -107,7 +111,7 @@ void syscall_dispatch(struct trapframe *tf)
         ret = 0;
         break;
     case SYS_EXIT:
-        thread_exit((int)tf->x[0]);
+        thread_exit((int)a0);
     case SYS_GETPID:
         ret = t->tid;
         break;
@@ -115,5 +119,5 @@ void syscall_dispatch(struct trapframe *tf)
         ret = -E_NOSYS;
         break;
     }
-    tf->x[0] = (uint64_t)ret;
+    tf_set_ret(tf, (uint64_t)ret);
 }

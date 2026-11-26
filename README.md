@@ -6,8 +6,8 @@
   <a href="https://github.com/coopersimpson101-debug/orbit-os/actions/workflows/ci.yml"><img src="https://github.com/coopersimpson101-debug/orbit-os/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 [![Release](https://img.shields.io/github/v/release/coopersimpson101-debug/orbit-os?color=22D3EE&label=release)](https://github.com/coopersimpson101-debug/orbit-os/releases/latest)
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/language-C%20%2B%20AArch64%20asm-22D3EE.svg" alt="C and AArch64 assembly">
-  <img src="https://img.shields.io/badge/target-Raspberry%20Pi%205%20%C2%B7%20QEMU%20virt-informational.svg" alt="Raspberry Pi 5 and QEMU virt">
+  <img src="https://img.shields.io/badge/language-C%20%2B%20AArch64%20%2F%20RV64%20asm-22D3EE.svg" alt="C, AArch64 and RISC-V assembly">
+  <img src="https://img.shields.io/badge/target-Raspberry%20Pi%205%20%C2%B7%20QEMU%20virt%20%C2%B7%20RV64-informational.svg" alt="Raspberry Pi 5, QEMU virt and RV64">
   <img src="https://img.shields.io/badge/dependencies-none%20(freestanding)-success.svg" alt="freestanding, no dependencies">
 </p>
 
@@ -39,17 +39,23 @@ Regenerate with <code>python docs/assets/make_figures.py</code>.</sub></p>
 - **Preemptive scheduler:** 8 priority levels, 50 ms slices driven by the 100 Hz generic timer, semaphores and mutexes; the `spin` demo proves preemption.
 - **User mode with isolation:** EL0 tasks make SVC syscalls; bad user pointers get `-EFAULT`, and an EL0 fault kills the task, not the kernel.
 - **UART chainloader** with a length + CRC-32 framed protocol, so new kernels can be sent over serial without touching the SD card.
-- **Booted in CI on every push** under QEMU `virt` (direct and chainloaded, entering at EL2) with both zig/LLVM and GNU cross-gcc builds, plus 17 host tests.
+- **Booted in CI on every push** under QEMU `virt` (direct and chainloaded, entering at EL2) with both zig/LLVM and GNU cross-gcc builds, plus the host tests.
+- **64-bit RISC-V port (`rv64`)** for the orbit-rv SoC and QEMU riscv64 `virt`: RV64IMA only (no compressed or FP instructions), the whole system in 256 KiB of RAM, M-mode entry with its own [SBI shim](docs/sbi.md) instead of OpenSBI, Sv39 with W^X sections, PLIC + 16550, U-mode tasks via `ecall`. Same scheduler, shell and demos as the Arm boards.
 
 ## Status
 
 | | what | how it was checked |
 |---|---|---|
 | ✅ | Builds for `virt` and `rpi5` with zig cc / ld.lld, `-Werror` | locally (Windows) and in CI |
-| ✅ | 9 C unit-test programs + image/layout checks (17 pytest tests) | locally and in CI |
+| ✅ | `rv64` builds (RV64IMA_Zicsr_Zifencei, no RVC, 116 KiB of the 256 KiB RAM incl. BSS and stacks), `-Werror` | locally (Windows) and in CI |
+| ✅ | 11 C unit-test programs (incl. scause decoder, Sv39 PTE builder) + image/layout checks | locally and in CI |
 | ✅ | `Makefile` build with GNU `aarch64-linux-gnu-gcc` | CI (`make-gcc` job) |
 | 🧪 | QEMU `virt` boot: direct `-kernel` (EL2→EL1 drop) and via the UART chainloader, full scripted shell session | CI, QEMU (emulated) |
 | 🧪 | Boot, chainloader, EL0, faults and preemption on Unicorn (`tools/uniboot.py`) | locally, approximate machine model |
+| 🧪 | `rv64` boot on the orbit-rv golden ISS: shell, preemption, U-mode syscalls, fault isolation, SBI poweroff (`tools/iss_test.py`) | locally, instruction-accurate simulator (see [testing](docs/testing.md#2b-orbit-rv-golden-iss-toolsiss_testpy-optional)) |
+| 🧪 | `rv64` QEMU riscv64 `virt` boot (`-bios none`), full scripted shell session | CI, QEMU (emulated) |
+| 🧪 | `rv64` boot on the **orbit-rv RTL** (CXXRTL simulation of the pipelined core, 25 MHz model, 256 KiB RAM): banner, shell, preemption, U-mode syscalls, fault isolation, poweroff; all 5,978,340 commits and traps checked against the golden ISS | in the orbit-rv repo: `tools/boot_os.py` |
+| ⏳ | **orbit-rv FPGA boot** (ULX3S) - bitstream builds with the yowasp tools; board run not yet done | orbit-rv `docs/fpga.md` |
 | ⏳ | **Raspberry Pi 5 hardware boot** - not yet attempted | [hardware validation checklist](docs/hardware-validation.md) |
 | 🗺️ | GICv3, SMP, per-process address spaces, filesystem, display, input, USB, radios | [roadmap](#roadmap-from-kernel-to-phone-and-watch-os) |
 
@@ -62,7 +68,7 @@ RAM above the first DTB memory bank and above 4 GiB is ignored.
 
 | Area | Implemented |
 |------|-------------|
-| **Boot** (`kernel/arch/boot.S`) | Linux arm64 Image header, secondary-core parking (MPIDR Aff0-2, A72 and A76 layouts; PSCI keeps them off), self-relocation to the link address, EL2→EL1 drop (HCR_EL2, CNTHCTL_EL2, CPTR_EL2, SCTLR_EL1), stack, BSS, VBAR_EL1 |
+| **Boot** (`kernel/arch/aarch64/boot.S`) | Linux arm64 Image header, secondary-core parking (MPIDR Aff0-2, A72 and A76 layouts; PSCI keeps them off), self-relocation to the link address, EL2→EL1 drop (HCR_EL2, CNTHCTL_EL2, CPTR_EL2, SCTLR_EL1), stack, BSS, VBAR_EL1 |
 | **Bootloader** (`chainloader/`, `tools/send_kernel.py`) | UART chainloader: relocates itself, receives a kernel with a length + CRC-32 framed protocol, and boots it with the firmware's DTB and EL. The Python sender works with a serial port or a TCP bridge to QEMU ([protocol](docs/chainloader-protocol.md)) |
 | **Board support** | Pi 5 (BCM2712 debug-UART PL011 at `0x10_7d00_1000`, GIC-400) and QEMU `virt` (PL011 `0x0900_0000`, GICv2). Values come from compile-time defaults refined by a **minimal FDT parser** (memory, stdout-path/aliases, `ranges` translation, GIC, timer PPI, PSCI method, `/memreserve/`) |
 | **Exceptions** | Full 16-entry vector table, 272-byte trap frames, ESR_EL1 decoder (class, fault status, level, WnR) with ELR/FAR dumps. A fault in a thread kills only that thread |
@@ -72,14 +78,15 @@ RAM above the first DTB memory bank and above 4 GiB is ignored.
 | **User mode** | EL0 tasks entered with `eret`. SVC syscalls `write`, `sleep`, `yield`, `exit`, `getpid` with user-pointer validation. EL0 faults kill the task, not the kernel |
 | **Shell** | Line editing (backspace/DEL, Ctrl-U, Ctrl-C, ANSI escapes ignored), quoting. Commands: `help info mem ps uptime ticks echo peek poke spawn reboot poweroff`. `peek`/`poke` are guarded (alignment, mapped range, no writes into the kernel image). `reboot`/`poweroff` use PSCI |
 | **Build** | `build.py` (zig cc + ld.lld + objcopy, hermetic via `pip install ziglang`), plus a `Makefile` for `aarch64-none-elf-gcc` / `aarch64-linux-gnu-gcc` |
-| **Tests** | 9 C unit-test programs for the portable modules, run under pytest. Image and layout checks. Unicorn-based emulated boot. QEMU boot tests in CI |
+| **Tests** | 11 C unit-test programs for the portable modules, run under pytest. Image and layout checks. Unicorn-based emulated boot, orbit-rv ISS boot. QEMU boot tests in CI |
+| **RV64 port** (`kernel/arch/riscv64/`) | M-mode `boot.S` (PMP, `medeleg`/`mideleg`, `mcounteren`, `mret` to S), SBI shim (TIME `set_timer` + STIP forwarding, SRST via the finisher, BASE, legacy console), `stvec` trap frame and scause decoder, Sv39 identity map with W^X and pre-set A/D bits plus a higher-half alias, SBI timer at 100 Hz, PLIC + NS16550 with RX interrupts, `sret` into U-mode, `ecall` syscalls with `SUM`-guarded copies. Details: [architecture](docs/architecture.md#rv64-port), [memory map](docs/memory-map.md#rv64-orbit-rv-soc-qemu-riscv64-virt-subset), [SBI](docs/sbi.md) |
 
 ## Quick start
 
 ```sh
 python -m venv .venv && . .venv/bin/activate       # Windows: .venv\Scripts\activate
 pip install ziglang pytest pyelftools unicorn       # unicorn/pyelftools optional
-python build.py                                     # -> build/{virt,rpi5}/kernel8.img, chainloader.img
+python build.py                                     # -> build/{virt,rpi5}/kernel8.img, chainloader.img, build/rv64/kernel.elf
 python -m pytest -q tests                           # host unit tests + emulated boot
 ```
 
@@ -93,6 +100,14 @@ qemu-system-aarch64 -M virt,gic-version=2,virtualization=on -cpu cortex-a72 -m 5
     -nographic -kernel build/virt/kernel8.img
 ```
 
+RISC-V (`rv64`):
+
+```sh
+python tools/qemu_test.py --board rv64             # needs qemu-system-riscv64 (qemu-system-misc)
+qemu-system-riscv64 -M virt -bios none -m 128M -nographic -kernel build/rv64/kernel.elf
+ORBIT_RV_PATH=../orbit-rv python tools/iss_test.py # on the orbit-rv golden ISS
+```
+
 On a Raspberry Pi 5, follow [docs/hardware-validation.md](docs/hardware-validation.md)
 (SD card layout, `config.txt`, debug UART wiring).
 
@@ -104,8 +119,8 @@ Shell demos (`spawn <name>`):
 | `mutex` | two threads, 2000 locked increments with a yield inside the critical section |
 | `pc` | producer/consumer with counting semaphores |
 | `spin` | two CPU-bound threads that never yield: proves timer preemption |
-| `user` | EL0 task making syscalls, including a rejected bad pointer |
-| `ufault` | EL0 task reads kernel memory, gets a permission fault, and is killed |
+| `user` | EL0 / U-mode task making syscalls, including a rejected bad pointer |
+| `ufault` | EL0 / U-mode task reads kernel memory, gets a permission (page) fault, and is killed |
 | `fault` | kernel thread touches an unmapped address, gets a translation fault, and is killed |
 
 ## Architecture
@@ -212,19 +227,20 @@ flowchart LR
 ## Repository layout
 
 ```
-kernel/arch      boot.S, vectors.S, switch.S, linker.ld.S
-kernel/core      main, console, platform (FDT probe), trap, syscalls, demos
-kernel/drivers   pl011, gic (v2), timer + PSCI
-kernel/mm        buddy, kheap, mm glue, mmu
+kernel/arch/aarch64   boot.S, vectors.S, switch.S, linker.ld.S, trap, mmu, cpu hooks
+kernel/arch/riscv64   boot.S (M-mode), sbi.c (SBI shim), entry.S, switch.S, trap, mmu (Sv39), cpu hooks
+kernel/core      main, console, clock, platform (FDT probe), syscalls, demos
+kernel/drivers   pl011, gic (v2), timer + PSCI; ns16550, plic, sbi_timer; serial (shared RX ring)
+kernel/mm        buddy, kheap, mm glue
 kernel/sched     runqueue, scheduler, semaphores/mutexes
 kernel/fdt       device-tree parser
 kernel/shell     line editor/tokenizer, shell commands
 kernel/user      the built-in EL0 program
-kernel/board     board_virt.c, board_rpi5.c
+kernel/board     board_virt.c, board_rpi5.c, board_rv64.c
 chainloader/     UART chainloader
-tools/           send_kernel.py, mkdtb.py, qemu_test.py, uniboot.py
+tools/           send_kernel.py, mkdtb.py, qemu_test.py, uniboot.py, iss_test.py, sessions.py
 tests/           C unit tests + pytest driver
-docs/            architecture, memory map, chainloader protocol, testing, hardware validation
+docs/            architecture, memory map, SBI shim, chainloader protocol, testing, hardware validation
 ```
 
 ## License

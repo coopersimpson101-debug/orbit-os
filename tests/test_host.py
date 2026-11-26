@@ -2,9 +2,12 @@
 
 * compiles the portable kernel modules natively with zig cc and runs the
   C unit tests (buddy, kheap, run-queue, FDT, shell parser, printf, ...)
-* cross-builds kernel + chainloader for both boards and checks the images
+* cross-builds kernel + chainloader for every board and checks the images
+  (AArch64 Image header and layout; RV64 ELF flags, ISA, 256 KiB budget)
 * optionally boots the qemu-virt image under Unicorn (tools/uniboot.py)
-  when the `unicorn` package is installed; QEMU itself runs in CI via
+  when the `unicorn` package is installed, and the rv64 image on the
+  orbit-rv golden ISS (tools/iss_test.py) when `orbit_rv` is importable
+  (ORBIT_RV_PATH=<orbit-rv checkout>); QEMU itself runs in CI via
   tools/qemu_test.py.
 """
 from __future__ import annotations
@@ -24,8 +27,11 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tools"))
 
 import build  # noqa: E402
+import iss_test  # noqa: E402
 import mkdtb  # noqa: E402
 import send_kernel  # noqa: E402
+
+AARCH64_BOARDS = [b for b, cfg in build.BOARDS.items() if cfg["arch"] == "aarch64"]
 
 
 @pytest.fixture(scope="session")
@@ -92,7 +98,7 @@ def test_mkdtb_header_is_valid():
     assert blob[off_struct:off_struct + 4] == b"\0\0\0\1"  # FDT_BEGIN_NODE
 
 
-@pytest.mark.parametrize("board", list(build.BOARDS))
+@pytest.mark.parametrize("board", AARCH64_BOARDS)
 def test_kernel_image(images, board):
     out = images / board
     img = (out / "kernel8.img").read_bytes()
@@ -124,7 +130,97 @@ def test_kernel_sections_page_aligned(images, board):
                   "__user_stack_start", "__user_stack_end", "_end"):
             assert addr(s) % 4096 == 0, s
         assert addr("__user_text_start") <= addr("user_entry") < addr("__user_text_end")
-        assert addr("vectors") % 2048 == 0
+        if build.BOARDS[board]["arch"] == "aarch64":
+            assert addr("vectors") % 2048 == 0
+        else:
+            assert addr("trap_entry") % 4 == 0 and addr("sbi_entry") % 4 == 0
+
+
+RV64_RAM = int(build.BOARDS["rv64"]["ram_size"], 16)
+
+
+def _riscv_arch_attr(elf) -> str:
+    """Tag_RISCV_arch string from .riscv.attributes, e.g. rv64i2p1_m2p0_..."""
+    sec = elf.get_section_by_name(".riscv.attributes")
+    data = sec.data() if sec else b""
+    i = data.find(b"rv64")
+    return data[i:data.index(b"\0", i)].decode() if i >= 0 else ""
+
+
+def test_rv64_image(images):
+    elftools = pytest.importorskip("elftools.elf.elffile")
+    out = images / "rv64"
+    with open(out / "kernel.elf", "rb") as f:
+        elf = elftools.ELFFile(f)
+        h = elf.header
+        assert h.e_machine == "EM_RISCV" and elf.elfclass == 64 and elf.little_endian
+        assert h.e_entry == 0x80000000
+        assert h.e_flags & 0x1 == 0, "RVC (compressed) flag set"
+        assert h.e_flags & 0x6 == 0, "float ABI must be lp64 (soft)"
+        syms = elf.get_section_by_name(".symtab")
+
+        def addr(name):
+            return syms.get_symbol_by_name(name)[0]["st_value"]
+
+        assert addr("_start") == 0x80000000
+        # Everything, including BSS, stacks and page tables, fits in 256 KiB
+        # and leaves room for the buddy allocator (8 KiB thread stacks).
+        image_end = addr("_end")
+        assert image_end - 0x80000000 + 64 * 1024 <= RV64_RAM, hex(image_end)
+        assert addr("__mstack_top") <= image_end and addr("__boot_stack_top") <= image_end
+
+        isa = _riscv_arch_attr(elf)
+        exts = isa.split("_")
+        assert exts[0].startswith("rv64i"), isa
+        assert {e[0] for e in exts[1:] if len(e) > 1 and e[1].isdigit()} <= {"m", "a"}, isa
+        assert any(e.startswith("zicsr") for e in exts), isa
+
+        # No 16-bit encodings anywhere in code: every word of every function
+        # (and all of .text) has the low two bits set.
+        for sec in elf.iter_sections():
+            if not sec["sh_flags"] & 0x4 or sec.name == ".user":
+                continue
+            data = sec.data()
+            bad = [hex(sec["sh_addr"] + i) for i in range(0, len(data), 4) if data[i] & 3 != 3]
+            assert not bad, f"{sec.name}: non-32-bit encodings at {bad[:4]}"
+        user = elf.get_section_by_name(".user")
+        udata = user.data()
+        for s in syms.iter_symbols():
+            if s["st_info"]["type"] != "STT_FUNC":
+                continue
+            off = s["st_value"] - user["sh_addr"]
+            if 0 <= off < len(udata):
+                for i in range(off, off + s["st_size"], 4):
+                    assert udata[i] & 3 == 3, f"{s.name}+{i - off:#x}: compressed encoding"
+
+        # kernel.bin is the flat image of the loadable sections from 0x8000_0000
+        flat = (out / "kernel.bin").read_bytes()
+        boot = elf.get_section_by_name(".text.boot")
+        assert flat[:boot["sh_size"]] == boot.data()
+        assert len(flat) <= addr("__bss_start") - 0x80000000
+
+
+def _orbit_rv_importable() -> bool:
+    try:
+        iss_test.import_iss()
+        return True
+    except ImportError:
+        return False
+
+
+HAVE_ORBIT_RV = _orbit_rv_importable()
+
+
+@pytest.mark.skipif(not HAVE_ORBIT_RV, reason="orbit_rv (golden ISS) not importable: set "
+                    "ORBIT_RV_PATH to an orbit-rv checkout to boot rv64 on the ISS")
+def test_iss_boot_rv64(images):
+    failures, con = iss_test.run_session(images / "rv64" / "kernel.elf", iss_test.sessions.RV64_SCRIPT,
+                                         echo=False)
+    print(con.text())
+    assert not failures, failures
+    assert con.hart.halted and con.hart.exit_code == 0
+    text = con.text()
+    assert "*** KERNEL PANIC" not in text and "SBI shim: unexpected" not in text
 
 
 HAVE_UNICORN = importlib.util.find_spec("unicorn") is not None

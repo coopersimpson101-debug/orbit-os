@@ -61,10 +61,7 @@ struct thread *thread_create(const char *name, thread_fn fn, void *arg, int prio
     t->prio = prio;
     t->kstack = stack;
     t->user_slot = -1;
-    t->ctx.sp = (uint64_t)(uintptr_t)stack + KSTACK_SIZE;
-    t->ctx.lr = (uint64_t)(uintptr_t)thread_trampoline;
-    t->ctx.x19 = (uint64_t)(uintptr_t)fn;
-    t->ctx.x20 = (uint64_t)(uintptr_t)arg;
+    cpu_ctx_init(&t->ctx, (uint64_t)(uintptr_t)stack + KSTACK_SIZE, fn, arg);
     list_init(&t->rq.node);
     t->state = T_RUNNABLE;
     rq_push(&rq, &t->rq, prio);

@@ -101,13 +101,16 @@ static void pc_main(void *arg)
 }
 
 /* --- spin: proves timer preemption between equal-priority CPU hogs ------ */
+#ifndef SPIN_DEMO_MS
+#define SPIN_DEMO_MS 500 /* > one 50 ms slice; the rv64 board shortens it for the ISS */
+#endif
 static volatile uint64_t spin_count[2];
 
 static void spin_fn(void *arg)
 {
     int me = (int)(uintptr_t)arg, other = !me;
     uint64_t frq = cpu_counter_freq();
-    uint64_t end = cpu_counter() + frq / 2; /* 500 ms of pure CPU */
+    uint64_t end = cpu_counter() + frq / 1000 * SPIN_DEMO_MS; /* pure CPU */
     uint64_t other_start = spin_count[other];
     while (cpu_counter() < end)
         spin_count[me]++;
