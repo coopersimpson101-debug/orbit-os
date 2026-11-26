@@ -54,7 +54,8 @@ Regenerate with <code>python docs/assets/make_figures.py</code>.</sub></p>
 | 🧪 | Boot, chainloader, EL0, faults and preemption on Unicorn (`tools/uniboot.py`) | locally, approximate machine model |
 | 🧪 | `rv64` boot on the orbit-rv golden ISS: shell, preemption, U-mode syscalls, fault isolation, SBI poweroff (`tools/iss_test.py`) | locally, instruction-accurate simulator (see [testing](docs/testing.md#2b-orbit-rv-golden-iss-toolsiss_testpy-optional)) |
 | 🧪 | `rv64` QEMU riscv64 `virt` boot (`-bios none`), full scripted shell session | CI, QEMU (emulated) |
-| ⏳ | **orbit-rv FPGA boot** - waiting for the SoC bitstream | |
+| 🧪 | `rv64` boot on the **orbit-rv RTL** (CXXRTL simulation of the pipelined core, 25 MHz model, 256 KiB RAM): banner, shell, preemption, U-mode syscalls, fault isolation, poweroff; all 5,978,340 commits and traps checked against the golden ISS | in the orbit-rv repo: `tools/boot_os.py` |
+| ⏳ | **orbit-rv FPGA boot** (ULX3S) - bitstream builds with the yowasp tools; board run not yet done | orbit-rv `docs/fpga.md` |
 | ⏳ | **Raspberry Pi 5 hardware boot** - not yet attempted | [hardware validation checklist](docs/hardware-validation.md) |
 | 🗺️ | GICv3, SMP, per-process address spaces, filesystem, display, input, USB, radios | [roadmap](#roadmap-from-kernel-to-phone-and-watch-os) |
 
