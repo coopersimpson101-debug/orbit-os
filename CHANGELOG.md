@@ -15,6 +15,12 @@ All notable changes to this project are documented here. The format follows [Kee
 - Arch code moved to `kernel/arch/aarch64/` (including `trap.c`, `mmu.c` and `arch.h`) behind `arch.h`/`context.h`/`hal.h`; UART RX ring and tick bookkeeping shared (`drivers/serial.c`, `core/clock.c`)
 - `build.py` compiles in parallel (`-j`)
 - `info` prints an `arch` line; RAM and buddy sizes below 1 MiB are shown in KiB
+- AArch64 page-table construction moved from `arch/aarch64/mmu.c` into the portable, host-tested `lib/a64pt.c` (`a64pt_map`, `a64pt_walk`; new `tests/test_a64pt.c`), mirroring `lib/sv39.c`
+
+### Fixed
+- `buddy_add_range` over pages that were already managed double-managed them when the range started inside an existing block: with a 4-page span, `add(0, 4)` then `add(1, 1)` gave 5 free pages (still passing `buddy_check()`) and page 1 was handed out by two live allocations. Already-managed pages are now skipped page-granularly, as the API comment always promised. `mm_init` only adds disjoint holes, so no shipped boot path hit this. Shared by both ports (`kernel/mm/buddy.c`). Regression tests in `tests/test_buddy.c`
+- AArch64 `map_range` computed the end as `ALIGN_DOWN(va) + ALIGN_UP(size)`, so an unaligned range lost its last page (`map(0x1800, 0x1000)` left 0x2000-0x27ff unmapped); `mmu_init` maps the DTB this way, harmless today only because the DTB lies inside mapped RAM on both boards. The end is now rounded up before `va` is rounded down. The rv64 Sv39 code (`lib/sv39.c`) already did this and was not affected. Regression tests in `tests/test_a64pt.c`
+- Both bugs were found by the Lean model and differential tests in [proofstack](https://github.com/coopersimpson101-debug/proofstack)
 
 ## [0.1.0] - 2026-11-25
 

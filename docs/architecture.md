@@ -48,7 +48,7 @@ flowchart TB
 | `kernel/sched/` | `runqueue.c` (portable), `sched.c`, `sync.c` | runqueue |
 | `kernel/fdt/` | read-only DTB parser | yes |
 | `kernel/shell/` | `shell_parse.c` (line editor, tokenizer; portable), `shell.c` | parser |
-| `kernel/lib/` | string, printf, ESR decoder, scause decoder, Sv39 PTE builder/walker, chainloader protocol + CRC-32 | yes |
+| `kernel/lib/` | string, printf, ESR decoder, scause decoder, AArch64 and Sv39 page-table builders/walkers, chainloader protocol + CRC-32 | yes |
 | `chainloader/` | serial bootloader | protocol logic |
 
 "Portable" files include no hardware headers. They are compiled for the

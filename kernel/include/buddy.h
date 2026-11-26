@@ -8,7 +8,8 @@
  *
  * After buddy_init() every page is considered reserved; call
  * buddy_add_range() for each usable sub-range. That makes punching holes
- * for the DTB, firmware reservations, etc. trivial. */
+ * for the DTB, firmware reservations, etc. trivial. Ranges may overlap pages
+ * that are already managed (free or allocated); those pages are skipped. */
 #ifndef ORBIT_BUDDY_H
 #define ORBIT_BUDDY_H
 

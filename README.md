@@ -48,7 +48,7 @@ Regenerate with <code>python docs/assets/make_figures.py</code>.</sub></p>
 |---|---|---|
 | ✅ | Builds for `virt` and `rpi5` with zig cc / ld.lld, `-Werror` | locally (Windows) and in CI |
 | ✅ | `rv64` builds (RV64IMA_Zicsr_Zifencei, no RVC, 116 KiB of the 256 KiB RAM incl. BSS and stacks), `-Werror` | locally (Windows) and in CI |
-| ✅ | 11 C unit-test programs (incl. scause decoder, Sv39 PTE builder) + image/layout checks | locally and in CI |
+| ✅ | 12 C unit-test programs (incl. scause decoder, Sv39 and AArch64 page-table builders) + image/layout checks | locally and in CI |
 | ✅ | `Makefile` build with GNU `aarch64-linux-gnu-gcc` | CI (`make-gcc` job) |
 | 🧪 | QEMU `virt` boot: direct `-kernel` (EL2→EL1 drop) and via the UART chainloader, full scripted shell session | CI, QEMU (emulated) |
 | 🧪 | Boot, chainloader, EL0, faults and preemption on Unicorn (`tools/uniboot.py`) | locally, approximate machine model |
@@ -78,7 +78,7 @@ RAM above the first DTB memory bank and above 4 GiB is ignored.
 | **User mode** | EL0 tasks entered with `eret`. SVC syscalls `write`, `sleep`, `yield`, `exit`, `getpid` with user-pointer validation. EL0 faults kill the task, not the kernel |
 | **Shell** | Line editing (backspace/DEL, Ctrl-U, Ctrl-C, ANSI escapes ignored), quoting. Commands: `help info mem ps uptime ticks echo peek poke spawn reboot poweroff`. `peek`/`poke` are guarded (alignment, mapped range, no writes into the kernel image). `reboot`/`poweroff` use PSCI |
 | **Build** | `build.py` (zig cc + ld.lld + objcopy, hermetic via `pip install ziglang`), plus a `Makefile` for `aarch64-none-elf-gcc` / `aarch64-linux-gnu-gcc` |
-| **Tests** | 11 C unit-test programs for the portable modules, run under pytest. Image and layout checks. Unicorn-based emulated boot, orbit-rv ISS boot. QEMU boot tests in CI |
+| **Tests** | 12 C unit-test programs for the portable modules, run under pytest. Image and layout checks. Unicorn-based emulated boot, orbit-rv ISS boot. QEMU boot tests in CI |
 | **RV64 port** (`kernel/arch/riscv64/`) | M-mode `boot.S` (PMP, `medeleg`/`mideleg`, `mcounteren`, `mret` to S), SBI shim (TIME `set_timer` + STIP forwarding, SRST via the finisher, BASE, legacy console), `stvec` trap frame and scause decoder, Sv39 identity map with W^X and pre-set A/D bits plus a higher-half alias, SBI timer at 100 Hz, PLIC + NS16550 with RX interrupts, `sret` into U-mode, `ecall` syscalls with `SUM`-guarded copies. Details: [architecture](docs/architecture.md#rv64-port), [memory map](docs/memory-map.md#rv64-orbit-rv-soc-qemu-riscv64-virt-subset), [SBI](docs/sbi.md) |
 
 ## Quick start

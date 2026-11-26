@@ -33,7 +33,7 @@ KSRC := $(addprefix kernel/, \
 	arch/aarch64/cpu.c arch/aarch64/trap.c arch/aarch64/mmu.c \
 	core/main.c core/console.c core/clock.c core/platform.c core/syscall.c core/demos.c \
 	drivers/serial.c drivers/pl011.c drivers/gic.c drivers/timer.c fdt/fdt.c \
-	lib/kstring.c lib/kprintf.c lib/esr.c lib/chainproto.c \
+	lib/kstring.c lib/kprintf.c lib/esr.c lib/chainproto.c lib/a64pt.c \
 	mm/buddy.c mm/kheap.c mm/mm.c \
 	sched/runqueue.c sched/sched.c sched/sync.c \
 	shell/shell.c shell/shell_parse.c user/user_prog.c)
