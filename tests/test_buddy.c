@@ -129,6 +129,68 @@ static void test_random_stress(void)
     CHECK(buddy_check(&b) == 0);
 }
 
+/* Regression: buddy_add_range() over pages that are already managed used to
+ * insert them a second time when the range started inside an existing
+ * block (found by proofstack's Lean model: Buddy.bug_double_allocation).
+ * With a 4-page span, add(0,4) then add(1,1) gave 5 free pages, passed
+ * buddy_check(), and alloc(0) / alloc(2) returned page 1 twice. */
+static void test_overlapping_add_is_ignored(void)
+{
+    void *p0, *p2;
+    setup();
+    buddy_init(&b, base, 4, meta);
+    buddy_add_range(&b, base, 4);
+    buddy_add_range(&b, base + 1 * PAGE_SIZE, 1);
+    CHECK(buddy_free_pages(&b) == 4);
+    CHECK(b.nfree[0] == 0 && b.nfree[2] == 1);
+    CHECK(buddy_check(&b) == 0);
+    p0 = buddy_alloc(&b, 0);
+    p2 = buddy_alloc(&b, 2);
+    CHECK(p0 == (void *)base);
+    CHECK(p2 == NULL); /* only 3 pages left: no second, overlapping block */
+    /* adding over allocated pages is ignored too */
+    buddy_add_range(&b, base, 4);
+    CHECK(buddy_free_pages(&b) == 3);
+    CHECK(buddy_check(&b) == 0);
+    CHECK(buddy_free(&b, p0) == 0);
+    CHECK(buddy_free_pages(&b) == 4 && b.nfree[2] == 1);
+}
+
+/* Random, overlapping adds: the managed set must be exactly the union of
+ * the ranges, and allocating everything must hand out each page once. */
+static void test_random_overlapping_adds(void)
+{
+    static uint8_t want[NPAGES], seen[NPAGES];
+    uint32_t seed = 777;
+    for (int round = 0; round < 200; round++) {
+        size_t n = 0, got = 0;
+        void *p;
+        setup();
+        memset(want, 0, sizeof want);
+        memset(seen, 0, sizeof seen);
+        for (int k = 0; k < 6; k++) {
+            seed = seed * 1103515245u + 12345u;
+            size_t a = (seed >> 8) % NPAGES;
+            seed = seed * 1103515245u + 12345u;
+            size_t len = (seed >> 8) % (NPAGES - a + 1);
+            buddy_add_range(&b, base + a * PAGE_SIZE, len);
+            for (size_t i = a; i < a + len; i++)
+                want[i] = 1;
+            CHECK(buddy_check(&b) == 0);
+        }
+        for (size_t i = 0; i < NPAGES; i++)
+            n += want[i];
+        CHECK(buddy_free_pages(&b) == n);
+        while ((p = buddy_alloc(&b, 0)) != NULL) {
+            size_t i = ((uintptr_t)p - base) / PAGE_SIZE;
+            CHECK(want[i] && !seen[i]);
+            seen[i] = 1;
+            got++;
+        }
+        CHECK(got == n);
+    }
+}
+
 static void test_order_for(void)
 {
     CHECK(buddy_order_for(1) == 0);
@@ -145,6 +207,8 @@ int main(void)
     RUN(test_errors);
     RUN(test_exhaustion_and_holes);
     RUN(test_random_stress);
+    RUN(test_overlapping_add_is_ignored);
+    RUN(test_random_overlapping_adds);
     RUN(test_order_for);
     free(raw);
     TEST_REPORT("test_buddy");

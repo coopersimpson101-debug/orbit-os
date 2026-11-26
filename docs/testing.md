@@ -9,7 +9,8 @@ tiny C harness, and pytest builds and runs each test program:
 
 | Test | Covers |
 |------|--------|
-| `test_buddy.c` | add/coalesce, split, alignment, double/invalid free, holes (reserved ranges), exhaustion, 20k-op random stress with overlap checks, `buddy_check()` invariants |
+| `test_buddy.c` | add/coalesce, split, alignment, double/invalid free, holes (reserved ranges), exhaustion, 20k-op random stress with overlap checks, overlapping `buddy_add_range` calls (regression) and 200 random overlapping-add rounds against a page bitmap, `buddy_check()` invariants |
+| `test_a64pt.c` | AArch64 stage-1 builder: unaligned ranges cover their last page (regression), 2 MiB blocks vs 4 KiB pages, first mapping wins, ranges under an existing block, higher-half alias, table exhaustion, all via the software walk |
 | `test_kheap.c` | size classes, alignment, LIFO reuse, large allocations, invalid frees, 600 mixed allocations with content checks, OOM recovery |
 | `test_runqueue.c` | priority order, FIFO within a level, round-robin rotation, removal, error cases |
 | `test_fdt.c` | DTB from `tools/mkdtb.py --preset rpi5-like`: paths, unit addresses, `ranges` translation to `0x10_7d00_1000`, untranslatable RP1 node, compatible lists, status, aliases + stdout-path, timer PPI, `/memreserve/` |

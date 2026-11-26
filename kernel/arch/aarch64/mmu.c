@@ -3,6 +3,7 @@
  * kernel image mapped at page granularity so text/rodata/data/user
  * sections get distinct permissions. TTBR1 holds a higher-half linear
  * alias of RAM at KERNEL_VA_BASE (groundwork for moving the kernel up). */
+#include "a64pt.h"
 #include "arch.h"
 #include "kernel.h"
 #include "mm.h"
@@ -17,17 +18,6 @@
                     (0xffULL << (8 * MT_NORMAL)) |        \
                     (0x44ULL << (8 * MT_NORMAL_NC)))
 
-#define PTE_VALID   (1ULL << 0)
-#define PTE_TABLE   (1ULL << 1) /* table at L0-L2, page at L3 */
-#define PTE_ATTR(i) ((uint64_t)(i) << 2)
-#define PTE_AP_EL0  (1ULL << 6) /* EL0 accessible */
-#define PTE_AP_RO   (1ULL << 7)
-#define PTE_SH_IS   (3ULL << 8)
-#define PTE_AF      (1ULL << 10)
-#define PTE_PXN     (1ULL << 53)
-#define PTE_UXN     (1ULL << 54)
-#define PTE_ADDR_MASK 0x0000fffffffff000ULL
-
 #define NORMAL      (PTE_ATTR(MT_NORMAL) | PTE_SH_IS | PTE_AF)
 #define PROT_KDATA  (NORMAL | PTE_PXN | PTE_UXN)
 #define PROT_KTEXT  (NORMAL | PTE_AP_RO | PTE_UXN)
@@ -36,7 +26,6 @@
 #define PROT_UDATA  (NORMAL | PTE_AP_EL0 | PTE_PXN | PTE_UXN)
 #define PROT_DEVICE (PTE_ATTR(MT_DEVICE_nGnRE) | PTE_AF | PTE_PXN | PTE_UXN)
 
-#define SZ_2M 0x200000ULL
 #define SZ_4K 0x1000ULL
 #define MAX_RAM_MAP (4ULL << 30)
 
@@ -56,49 +45,20 @@ static uint64_t *alloc_table(void)
     return t;
 }
 
-/* Map [va, va+size) -> pa. Uses 2 MiB blocks where alignment allows and
- * the L2 slot is still empty; never overwrites an existing mapping, so
- * finer-grained regions mapped first keep their permissions. */
+static uint64_t *alloc_table_cb(void *ctx)
+{
+    (void)ctx;
+    return alloc_table();
+}
+
+/* Map every page [va, va+size) touches -> pa; see a64pt_map() (lib/a64pt.c,
+ * host-tested). Finer-grained regions mapped first keep their permissions. */
 static void map_range(uint64_t *l0, uint64_t va, uint64_t pa, uint64_t size,
                       uint64_t prot)
 {
-    uint64_t end;
-    va = ALIGN_DOWN(va, SZ_4K);
-    pa = ALIGN_DOWN(pa, SZ_4K);
-    end = va + ALIGN_UP(size, SZ_4K);
-    while (va < end) {
-        uint64_t *t = l0;
-        int level;
-        for (level = 0; level < 3; level++) {
-            unsigned shift = 39 - 9 * level;
-            unsigned idx = (va >> shift) & 511;
-            if (level == 2) {
-                if (t[idx] == 0 && !(va & (SZ_2M - 1)) && !(pa & (SZ_2M - 1)) &&
-                    end - va >= SZ_2M) {
-                    t[idx] = pa | prot | PTE_VALID; /* block descriptor */
-                    goto advance_block;
-                }
-                if ((t[idx] & PTE_VALID) && !(t[idx] & PTE_TABLE))
-                    goto advance_block; /* already covered by a block */
-            }
-            if (!(t[idx] & PTE_VALID))
-                t[idx] = (uint64_t)(uintptr_t)alloc_table() | PTE_VALID | PTE_TABLE;
-            t = (uint64_t *)(uintptr_t)(t[idx] & PTE_ADDR_MASK);
-        }
-        {
-            unsigned idx = (va >> 12) & 511;
-            if (!(t[idx] & PTE_VALID))
-                t[idx] = pa | prot | PTE_VALID | PTE_TABLE;
-        }
-        va += SZ_4K;
-        pa += SZ_4K;
-        continue;
-    advance_block: {
-            uint64_t step = SZ_2M - (va & (SZ_2M - 1));
-            va += step;
-            pa += step;
-        }
-    }
+    struct a64pt_space s = { l0, alloc_table_cb, 0 };
+    if (a64pt_map(&s, va, pa, size, prot))
+        panic("mmu: page-table pool exhausted");
 }
 
 static void map_ident(uint64_t start, uint64_t end, uint64_t prot)

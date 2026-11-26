@@ -96,6 +96,7 @@ ARCH_SOURCES = {
         "drivers/timer.c",
         "lib/esr.c",
         "lib/chainproto.c",
+        "lib/a64pt.c",
     ],
     "riscv64": [
         "arch/riscv64/boot.S",
@@ -129,6 +130,7 @@ HOST_TESTS = {
     "test_chainproto": ["lib/chainproto.c"],
     "test_scause": ["lib/scause.c", "lib/kprintf.c"],
     "test_sv39": ["lib/sv39.c"],
+    "test_a64pt": ["lib/a64pt.c"],
 }
 
 JOBS = os.cpu_count() or 1

@@ -73,6 +73,32 @@ static void free_block(struct buddy *b, size_t idx, unsigned order)
     push_free(b, idx, order);
 }
 
+/* End (exclusive page index) of the free or allocated block that contains
+ * page p, or 0 if p is not managed. Blocks are naturally aligned, so the
+ * head of an order-o block containing p is p rounded down to 2^o; only
+ * heads carry metadata. */
+static size_t managed_block_end(const struct buddy *b, size_t p)
+{
+    unsigned o;
+    for (o = 0; o < BUDDY_ORDERS; o++) {
+        size_t h = p & ~(((size_t)1 << o) - 1);
+        uint8_t m = b->meta[h];
+        if ((m & (META_FREE | META_ALLOC)) && META_ORDER(m) == o)
+            return h + ((size_t)1 << o);
+    }
+    return 0;
+}
+
+/* Does any managed block start inside [idx, idx + n)? */
+static int has_head_in(const struct buddy *b, size_t idx, size_t n)
+{
+    size_t i;
+    for (i = idx; i < idx + n; i++)
+        if (b->meta[i] & (META_FREE | META_ALLOC))
+            return 1;
+    return 0;
+}
+
 void buddy_add_range(struct buddy *b, uintptr_t addr, size_t npages)
 {
     size_t idx, end;
@@ -88,17 +114,23 @@ void buddy_add_range(struct buddy *b, uintptr_t addr, size_t npages)
     if (end > b->npages)
         end = b->npages;
     /* Insert the largest naturally aligned blocks that fit; coalescing in
-     * free_block() merges them with neighbours added earlier. */
+     * free_block() merges them with neighbours added earlier. Pages that are
+     * already managed (free or allocated) are skipped, so overlapping adds
+     * are harmless: a candidate block overlaps an existing block exactly
+     * when it starts inside that block or that block starts inside it. */
     while (idx < end) {
         unsigned order = 0;
+        size_t covered = managed_block_end(b, idx);
+        if (covered) {
+            idx = covered; /* skip the whole existing block */
+            continue;
+        }
         while (order + 1 < BUDDY_ORDERS &&
                (idx & (((size_t)2 << order) - 1)) == 0 &&
                idx + ((size_t)2 << order) <= end)
             order++;
-        if (b->meta[idx] & (META_FREE | META_ALLOC)) {
-            idx++; /* already managed; skip (overlapping add) */
-            continue;
-        }
+        while (order > 0 && has_head_in(b, idx, (size_t)1 << order))
+            order--;
         b->managed_pages += (size_t)1 << order;
         free_block(b, idx, order);
         idx += (size_t)1 << order;
