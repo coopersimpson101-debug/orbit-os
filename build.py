@@ -5,15 +5,16 @@ Uses the Zig toolchain (``pip install ziglang``) as a hermetic cross
 compiler: ``zig cc`` (clang) for C/asm, ``zig ld.lld`` to link and
 ``zig objcopy`` to produce raw images. No system cross-gcc needed.
 
-    python build.py                    # every board (virt, rpi5)
-    python build.py --board virt       # one board
+    python build.py                    # every board (virt, rpi5, rv64)
+    python build.py --board rv64       # one board
     python build.py -j 1               # serial build (default: one job per CPU)
     python build.py host-tests         # compile + run host unit tests
     python build.py clean
 
 Outputs (per board) in build/<board>/:
-    kernel.elf, kernel8.img            (rpi5 also: kernel_2712.img)
-    chainloader.elf, chainloader.img
+    aarch64 (virt, rpi5): kernel.elf, kernel8.img (rpi5 also: kernel_2712.img),
+                          chainloader.elf, chainloader.img
+    riscv64 (rv64):       kernel.elf (load at 0x8000_0000), kernel.bin (flat)
 """
 from __future__ import annotations
 
@@ -45,6 +46,15 @@ BOARDS = {
         "uart_base": "0x107d001000",
         "uart_clock": "0",
         "mcpu": "cortex_a76",
+    },
+    # orbit-rv SoC + QEMU riscv64 virt subset. RV64IMA_Zicsr_Zifencei only
+    # (no C, no F/D); everything must fit in 256 KiB of block RAM.
+    "rv64": {
+        "arch": "riscv64",
+        "kernel_base": "0x80000000",
+        "ram_size": "0x40000",
+        "mcpu": "generic_rv64+m+a+zicsr+zifencei",
+        "defines": {"KSTACK_ORDER": "1", "SPIN_DEMO_MS": "100"},
     },
 }
 
@@ -87,6 +97,20 @@ ARCH_SOURCES = {
         "lib/esr.c",
         "lib/chainproto.c",
     ],
+    "riscv64": [
+        "arch/riscv64/boot.S",
+        "arch/riscv64/entry.S",
+        "arch/riscv64/switch.S",
+        "arch/riscv64/cpu.c",
+        "arch/riscv64/sbi.c",
+        "arch/riscv64/trap.c",
+        "arch/riscv64/mmu.c",
+        "drivers/ns16550.c",
+        "drivers/plic.c",
+        "drivers/sbi_timer.c",
+        "lib/scause.c",
+        "lib/sv39.c",
+    ],
 }
 
 # Kept for tools that list every kernel source of the AArch64 build.
@@ -103,6 +127,8 @@ HOST_TESTS = {
     "test_shell_parse": ["shell/shell_parse.c"],
     "test_esr": ["lib/esr.c", "lib/kprintf.c"],
     "test_chainproto": ["lib/chainproto.c"],
+    "test_scause": ["lib/scause.c", "lib/kprintf.c"],
+    "test_sv39": ["lib/sv39.c"],
 }
 
 JOBS = os.cpu_count() or 1
