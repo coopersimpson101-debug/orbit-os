@@ -58,7 +58,7 @@ terminal at 115200 baud, and power on.
 Expected (abridged):
 
 ```
-OrbitOS v0.1.0 (rpi5) - hobby AArch64 kernel
+OrbitOS v0.2.0 (rpi5) - hobby AArch64 kernel
 [boot] entered at EL2, now at EL1, dtb=0x..., image 0x80000-...
 [fdt] device tree at 0x..., N bytes
 [boot] RAM 0x0 + ... MiB (dtb /memory reg[0])

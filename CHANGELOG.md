@@ -2,7 +2,9 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.2.0] - 2026-11-26
+
+Adds a 64-bit RISC-V port for the orbit-rv CPU and QEMU, and fixes two latent memory-management bugs found by formal verification.
 
 ### Added
 - `rv64` board: 64-bit RISC-V port (RV64IMA_Zicsr_Zifencei, no C/F/D) for the orbit-rv SoC and QEMU riscv64 `virt` (`-bios none`), fitting in 256 KiB of RAM; `python build.py` builds `build/rv64/kernel.elf` and `kernel.bin`
@@ -33,4 +35,5 @@ First public release of a hobby AArch64 kernel for the Raspberry Pi 5, the base 
 - Priority round-robin scheduler, mutexes and semaphores, EL0 tasks with SVC syscalls, UART shell
 - Boots in QEMU virt in CI (direct at EL2, and chainloaded), with both zig and GNU gcc builds
 
+[0.2.0]: https://github.com/coopersimpson101-debug/orbit-os/releases/tag/v0.2.0
 [0.1.0]: https://github.com/coopersimpson101-debug/orbit-os/releases/tag/v0.1.0

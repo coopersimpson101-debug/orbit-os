@@ -7,7 +7,7 @@
 #include "kstring.h"
 #include "kprintf.h"
 
-#define ORBIT_VERSION "0.1.0"
+#define ORBIT_VERSION "0.2.0"
 
 #define ALIGN_UP(x, a)   (((x) + ((a) - 1)) & ~((uint64_t)(a) - 1))
 #define ALIGN_DOWN(x, a) ((x) & ~((uint64_t)(a) - 1))
