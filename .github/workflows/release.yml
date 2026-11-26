@@ -29,6 +29,8 @@ jobs:
           (cd dist && zip -r orbit-os-rpi5.zip orbit-os-rpi5)
           cp build/virt/kernel.elf dist/orbit-os-qemu-virt.elf
           cp build/rpi5/kernel.elf dist/orbit-os-rpi5.elf
+          cp build/rv64/kernel.elf dist/orbit-os-rv64.elf
+          cp build/rv64/kernel.bin dist/orbit-os-rv64.bin
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
@@ -38,3 +40,5 @@ jobs:
             dist/orbit-os-rpi5.zip
             dist/orbit-os-qemu-virt.elf
             dist/orbit-os-rpi5.elf
+            dist/orbit-os-rv64.elf
+            dist/orbit-os-rv64.bin

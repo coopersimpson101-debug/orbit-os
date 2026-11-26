@@ -1,9 +1,10 @@
 # Memory maps
 
 All addresses are physical. The kernel runs identity-mapped, and TTBR1 adds
-a linear alias at `0xffff_0000_0000_0000 + PA`.
+a linear alias at `0xffff_0000_0000_0000 + PA` (AArch64) or the Sv39 upper
+half adds one at `0xffff_ffc0_0000_0000 + PA` (rv64).
 
-## Kernel image layout (from `kernel/arch/linker.ld.S`)
+## Kernel image layout (from `kernel/arch/aarch64/linker.ld.S`)
 
 Example: the qemu-virt build at the time of writing (`python build.py`; the
 exact numbers change as code grows):
@@ -52,3 +53,37 @@ The rpi5 build has the same layout shifted to `KERNEL_BASE = 0x8_0000`.
 The firmware's DTB overrides these defaults where it can (see
 `kernel/core/platform.c`), but only inside the device window, so a
 surprising DT cannot point the console at an unmapped address.
+
+## rv64 (orbit-rv SoC, QEMU riscv64 `virt` subset)
+
+Device addresses are the same on both machines (`kernel/arch/riscv64/include/rv64_map.h`).
+
+| Range | What |
+|-------|------|
+| `0x0010_0000` | finisher (`sifive,test0`): `0x5555` off, `0x7777` reset, `0x3333 \| code << 16` fail. Used by the M-mode shim only, not mapped for S |
+| `0x0200_0000` | CLINT: `msip` +0, `mtimecmp` +`0x4000`, `mtime` +`0xbff8` (10 MHz). M-mode only |
+| `0x0c00_0000` | PLIC: priority +4·src, pending +`0x1000`, enable +`0x2000`+`0x80`·ctx, threshold/claim +`0x20_0000`+`0x1000`·ctx; context 1 = hart 0 S-mode |
+| `0x1000_0000` | NS16550 UART, byte registers at stride 1, PLIC source 10, `UART_CLK_HZ` 25 MHz on orbit-rv (115200 8N1, divisor 14) |
+| `0x8000_0000` | RAM and reset PC. The kernel assumes 256 KiB (`RAM_SIZE`), also under QEMU (`-m 128M` is capped) |
+| `0x87e0_0000` (typ.) | DTB under QEMU (2 MiB aligned near the top of its RAM; mapped read-only by megapage) |
+
+Kernel image (`kernel/arch/riscv64/linker.ld.S`, `-Os`, at the time of writing):
+
+| Symbol / section | Address | Notes |
+|------------------|---------|-------|
+| `_start`, `.text.boot` | `0x8000_0000` | M-mode entry + SBI trap vector `sbi_entry` |
+| `.user` | `0x8000_1000` .. `0x8000_2000` | U-mode code + its strings |
+| `.text` | `0x8000_2000` .. `0x8000_b000` | `trap_entry` (stvec) inside |
+| `.rodata` | .. `0x8000_d000` | |
+| `.bss` | `0x8000_d000` .. `0x8001_5050` | page tables (5 used of 6), thread table, RX ring |
+| `.user_stack` | `0x8001_6000` .. `0x8001_a000` | 4 x 4 KiB U-mode stacks |
+| boot stack (idle thread) | 8 KiB, top `0x8001_c000` | |
+| M-mode stack (SBI shim) | 2 KiB, top `0x8001_c800` | |
+| `_end` | `0x8001_d000` | 116 KiB including BSS and stacks |
+| buddy metadata | `0x8001_d000` (one page) | |
+| buddy-managed pages | `0x8001_e000` .. `0x8004_0000` | 34 pages (136 KiB): 8 KiB thread stacks, heap |
+
+`kernel.bin` (the flat image of the loadable sections, ~50 KB) is what an
+FPGA bitstream would preload into block RAM; `kernel.elf` is what QEMU
+and the ISS load. The link fails (`ASSERT`) if `_end` passes
+`0x8000_0000 + RAM_SIZE`, and pytest requires at least 64 KiB of headroom.

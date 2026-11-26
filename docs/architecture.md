@@ -1,7 +1,8 @@
 # OrbitOS architecture
 
 OrbitOS is a single-address-space, uniprocessor, preemptive kernel for
-AArch64. The current design is a small monolithic kernel. The plan is to
+AArch64 and, since the rv64 port, 64-bit RISC-V (see
+[RV64 port](#rv64-port) below). The current design is a small monolithic kernel. The plan is to
 shrink it toward a microkernel (see the roadmap in the README), so the
 subsystem boundaries below are drawn where IPC boundaries are expected to go later.
 
@@ -39,18 +40,32 @@ flowchart TB
 
 | Directory | Contents | Host-tested |
 |-----------|----------|-------------|
-| `kernel/arch/` | `boot.S` (entry, relocation, EL2→EL1), `vectors.S`, `switch.S`, linker script | no (QEMU/Unicorn) |
-| `kernel/core/` | `kernel_main`, console/panic, trap dispatch, syscalls + EL0 tasks, demos, platform probe | no |
-| `kernel/drivers/` | PL011, GICv2, generic timer, PSCI | no |
-| `kernel/mm/` | `buddy.c`, `kheap.c` (portable), `mm.c` glue, `mmu.c` | buddy, kheap |
+| `kernel/arch/aarch64/` | `boot.S` (entry, relocation, EL2→EL1), `vectors.S`, `switch.S`, linker script, `trap.c`, `mmu.c`, `cpu.c` (hal.h hooks), `include/arch.h` + `context.h` | no (QEMU/Unicorn) |
+| `kernel/arch/riscv64/` | `boot.S` (M-mode entry + SBI trap vector), `sbi.c` (SBI shim), `entry.S` (stvec), `switch.S`, linker script, `trap.c`, `mmu.c` (Sv39), `cpu.c`, `include/` | no (ISS/QEMU) |
+| `kernel/core/` | `kernel_main`, console/panic, tick clock, syscalls + user tasks, demos, platform probe | no |
+| `kernel/drivers/` | AArch64: PL011, GICv2, generic timer, PSCI. RV64: NS16550, PLIC, SBI timer. Shared UART RX ring (`serial.c`) | no |
+| `kernel/mm/` | `buddy.c`, `kheap.c` (portable), `mm.c` glue | buddy, kheap |
 | `kernel/sched/` | `runqueue.c` (portable), `sched.c`, `sync.c` | runqueue |
 | `kernel/fdt/` | read-only DTB parser | yes |
 | `kernel/shell/` | `shell_parse.c` (line editor, tokenizer; portable), `shell.c` | parser |
-| `kernel/lib/` | string, printf, ESR decoder, chainloader protocol + CRC-32 | yes |
+| `kernel/lib/` | string, printf, ESR decoder, scause decoder, Sv39 PTE builder/walker, chainloader protocol + CRC-32 | yes |
 | `chainloader/` | serial bootloader | protocol logic |
 
-"Portable" files include no hardware headers. They are compiled twice: for
-the kernel (`aarch64-freestanding`) and natively for the unit tests in `tests/`.
+"Portable" files include no hardware headers. They are compiled for the
+kernel (`aarch64-freestanding`, `riscv64-freestanding`) and natively for the
+unit tests in `tests/`.
+
+Architecture code sits behind small interfaces instead of `#ifdef`s in the
+portable files: `build.py` puts `kernel/arch/<arch>/include` first on the
+include path, so `#include "arch.h"` (MMIO, IRQ masking, counters, mode
+names) and `"context.h"` (`struct cpu_ctx`, `struct trapframe`, syscall
+argument accessors) resolve per architecture. `hal.h` declares the few
+hooks the shell and `kernel_main` need (`arch_report_entry`, `arch_info`,
+`system_reboot`, `system_poweroff`), and `drivers.h` the UART,
+interrupt-controller (`irqchip_init/enable`) and tick APIs that each
+board implements. The only remaining `#if`s are the arch-specific fields
+of `struct platform`, the DT probes in `platform.c` and the system-call
+instruction in the user program.
 
 ## Boot flow
 
@@ -160,3 +175,64 @@ from the DTB:
   distributor and `reg[1]` as the CPU interface. GICv3 trees are detected
   and reported as unsupported.
 * timer PPI (entry 1 of `arm,armv8-timer`) and the PSCI conduit (`method`).
+
+## RV64 port
+
+The `rv64` board targets the orbit-rv SoC (RV64IMA_Zicsr_Zifencei, no C,
+no F/D, 256 KiB of FPGA block RAM) and the matching subset of QEMU's
+riscv64 `virt` machine. Everything above the arch layer is shared with
+the AArch64 boards: scheduler, sync, buddy/kheap, FDT, shell, demos and
+the user program.
+
+| Concern | AArch64 | RV64 |
+|---------|---------|------|
+| Entry | EL2 or EL1, Linux Image header | M-mode at `0x8000_0000`, `a0` = hartid, `a1` = DTB or 0 |
+| Firmware | PSCI (TF-A / QEMU) | built-in SBI shim in M-mode ([sbi.md](sbi.md)) |
+| Kernel mode / user mode | EL1 / EL0 | S-mode / U-mode |
+| Trap entry | 16-entry `VBAR_EL1` table, 272-byte frame | `stvec` direct, 288-byte frame (x1-x31, sstatus, sepc, stval, scause) |
+| Kernel stack on user trap | `SP_EL1` | `sscratch` holds the kernel stack top while in U-mode, 0 in S-mode |
+| Fault decoder | `esr.c` | `scause.c` |
+| Translation | 4-level, 48-bit VA, MAIR types | Sv39, A/D bits pre-set (orbit-rv is Svade) |
+| Timer | CNTP, PPI 30 | SBI `set_timer` → CLINT `mtimecmp` → STIP |
+| Interrupt controller | GICv2 | PLIC, context 1 (hart 0 S-mode) |
+| UART | PL011 | NS16550 (byte registers, PLIC source 10) |
+| Syscall | `svc #0`, x8 = number | `ecall`, a7 = number (same numbers) |
+| Power | PSCI SYSTEM_OFF/RESET | SBI SRST → finisher `0x5555`/`0x7777` |
+| Kernel stacks | 16 KiB | 8 KiB (`KSTACK_ORDER=1`, RAM budget) |
+
+Boot on rv64: `boot.S` (M-mode) parks other harts, clears BSS, installs the
+SBI trap vector and stack, opens PMP, delegates exceptions and the S-level
+interrupts, and `mret`s into `kernel_main` in S-mode with `stvec` set. From
+there the sequence is the same as on AArch64: UART, banner, FDT (QEMU only;
+orbit-rv passes no DTB), Sv39 on, buddy + kheap, PLIC, scheduler, timer,
+UART RX interrupt, shell.
+
+Traps: `entry.S` saves the frame and calls `trap_dispatch()`. Supervisor
+timer and external interrupts go to the tick and the PLIC claim loop, then
+`sched_preempt_point()`. `ecall` from U advances `sepc` and enters
+`syscall_dispatch()`. Any other exception is decoded by `scause.c` and kills
+the thread that caused it (a U-mode task or a kernel thread), or panics in
+the idle context. `SYS_WRITE` reads the user buffer with `sstatus.SUM` set
+only around the copy (`user_access_begin/end`); the pointer is validated
+against the user sections first, as on AArch64.
+
+Sv39 layout (`arch/riscv64/mmu.c`, built with `lib/sv39.c`):
+
+| Range | S-mode | U-mode | Page size |
+|-------|--------|--------|-----------|
+| `.text.boot`, `.text` | R-X | --- | 4 KiB |
+| `.user` (user code + strings) | --- (U page, S never executes it; SUM to read) | R-X | 4 KiB |
+| `.rodata` | R-- | --- | 4 KiB |
+| `.data`, `.bss`, stacks, page tables | RW- | --- | 4 KiB |
+| `.user_stack` | --- (SUM to touch) | RW- | 4 KiB |
+| rest of the 256 KiB RAM | RW- | --- | 4 KiB |
+| DTB (QEMU) | R-- | --- | 2 MiB, rounded out |
+| PLIC, UART | RW- | --- | 2 MiB, rounded out |
+| higher-half alias `0xffff_ffc0_0000_0000 + PA` | RW- | --- | 2 MiB |
+
+Every leaf has A and D set when it is created, because the orbit-rv CPU
+raises a page fault instead of updating them. `mmu_translate()` (used by
+`peek`/`poke`) is a software walk that answers "would a kernel read
+fault?", like `AT S1E1R`: U pages count as not readable. Five 4 KiB tables
+are used (root, two L1 for the device and RAM gigabytes, one L0 for the
+kernel image, one L1 for the alias).
