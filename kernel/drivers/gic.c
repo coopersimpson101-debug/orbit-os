@@ -2,6 +2,7 @@
  * Pi 5: GIC-400 inside the BCM2712. QEMU virt: -M virt,gic-version=2. */
 #include "arch.h"
 #include "drivers.h"
+#include "kernel.h"
 
 #define GICD_CTLR       0x000
 #define GICD_TYPER      0x004
@@ -83,4 +84,16 @@ void gic_eoi(uint32_t iar)
 uint32_t gic_num_lines(void)
 {
     return nlines;
+}
+
+void irqchip_init(void)
+{
+    gic_init(plat.gicd_base, plat.gicc_base);
+    kprintf("[gic] GICv2 at D=%p C=%p, %u interrupt lines\n", (void *)plat.gicd_base,
+            (void *)plat.gicc_base, gic_num_lines());
+}
+
+void irqchip_enable(int irq)
+{
+    gic_enable_irq(irq);
 }

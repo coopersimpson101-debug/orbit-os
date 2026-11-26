@@ -1,23 +1,21 @@
 /* Preemptive priority round-robin scheduler for kernel threads and
- * EL0 user tasks (single core). */
+ * user tasks (EL0 / U-mode), single core. */
 #ifndef ORBIT_SCHED_H
 #define ORBIT_SCHED_H
 
 #include <stdint.h>
+#include "context.h"
 #include "runqueue.h"
 
 #define MAX_THREADS   32
-#define KSTACK_SIZE   (16 * 1024)
+#ifndef KSTACK_ORDER
+#define KSTACK_ORDER  2          /* 16 KiB kernel stacks; boards may shrink it */
+#endif
+#define KSTACK_SIZE   (4096UL << KSTACK_ORDER)
 #define SLICE_TICKS   5          /* 50 ms at HZ=100 */
 #define PRIO_SHELL    1
 #define PRIO_DEFAULT  3
 #define PRIO_IDLE     (RQ_NPRIO - 1)
-
-/* Callee-saved state; layout shared with switch.S. */
-struct cpu_ctx {
-    uint64_t x19, x20, x21, x22, x23, x24, x25, x26, x27, x28;
-    uint64_t fp, lr, sp;
-};
 
 enum thread_state {
     T_UNUSED = 0,
@@ -40,7 +38,7 @@ struct thread {
     uint64_t cpu_ticks;
     int slice;
     int is_user;
-    int user_slot;               /* EL0 stack slot, -1 for kernel threads */
+    int user_slot;               /* user stack slot, -1 for kernel threads */
     int exit_code;
 };
 
@@ -66,9 +64,9 @@ uint64_t sched_context_switches(void);
 
 /* asm (switch.S) */
 void cpu_switch(struct cpu_ctx *prev, struct cpu_ctx *next);
-void thread_trampoline(void);
-/* Drop to EL0 at pc with SP_EL0=sp, x0=a0, x1=a1; SP_EL1 is reset to
- * kstack_top so the kernel stack is empty while the task runs. */
+/* Drop to user mode at pc with user sp, first two argument registers =
+ * a0, a1; the kernel stack is reset to kstack_top (empty) for the next
+ * trap. AArch64: eret to EL0. RV64: sret to U-mode, kstack_top in sscratch. */
 __attribute__((noreturn)) void enter_user(uint64_t pc, uint64_t sp, uint64_t a0,
                                           uint64_t a1, uint64_t kstack_top);
 

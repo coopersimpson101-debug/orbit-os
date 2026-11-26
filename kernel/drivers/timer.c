@@ -1,51 +1,31 @@
-/* ARM generic timer: EL1 non-secure physical timer (CNTP_*), HZ ticks.
- * boot.S grants EL1 access via CNTHCTL_EL2 when we start at EL2. */
+/* ARM generic timer: EL1 non-secure physical timer (CNTP_*), HZ ticks,
+ * plus PSCI calls and the GIC IRQ dispatch. boot.S grants EL1 access to
+ * the timer via CNTHCTL_EL2 when we start at EL2. */
 #include "arch.h"
 #include "drivers.h"
 #include "kernel.h"
 #include "sched.h"
 
 static uint64_t tick_interval;
-static volatile uint64_t ticks;
 static int timer_intid;
-static uint64_t boot_count; /* firmware may not start CNTPCT at 0 */
 
-void timer_init(int intid)
+void timer_init(void)
 {
     uint64_t frq = cpu_counter_freq();
-    timer_intid = intid;
-    boot_count = cpu_counter();
+    timer_intid = plat.timer_irq;
+    clock_init();
     tick_interval = frq / HZ;
     write_sysreg(cntp_tval_el0, tick_interval);
     write_sysreg(cntp_ctl_el0, 1); /* ENABLE, not masked */
     isb();
-    gic_enable_irq(intid);
+    gic_enable_irq(timer_intid);
+    kprintf("[timer] %d Hz tick on INTID %d (CNTFRQ %lu Hz)\n", HZ, timer_intid, frq);
 }
 
 void timer_irq(void)
 {
     write_sysreg(cntp_tval_el0, tick_interval);
-    ticks++;
-    sched_tick();
-}
-
-uint64_t timer_ticks(void)
-{
-    return ticks;
-}
-
-uint64_t uptime_ms(void)
-{
-    uint64_t frq = cpu_counter_freq();
-    return frq ? (cpu_counter() - boot_count) / (frq / 1000) : 0;
-}
-
-void delay_us(uint64_t us)
-{
-    uint64_t frq = cpu_counter_freq();
-    uint64_t end = cpu_counter() + us * (frq / 1000000);
-    while (cpu_counter() < end)
-        ;
+    clock_tick();
 }
 
 /* SMCCC v1.0 lets firmware clobber x4-x17. */

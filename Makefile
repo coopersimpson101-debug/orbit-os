@@ -1,5 +1,6 @@
-# OrbitOS - GNU make build for aarch64 GCC cross toolchains.
-# build.py (zig cc) is the primary, tested build; this mirrors it for
+# OrbitOS - GNU make build for aarch64 GCC cross toolchains (virt, rpi5).
+# build.py (zig cc) is the primary, tested build (and the only one for the
+# rv64 board); this mirrors its AArch64 part for
 # people who already have aarch64-none-elf-gcc (Arm GNU Toolchain) or
 # aarch64-linux-gnu-gcc installed.
 #
@@ -28,11 +29,12 @@ rpi5_UART_CLOCK  := 0
 rpi5_MCPU        := cortex-a76
 
 KSRC := $(addprefix kernel/, \
-	arch/boot.S arch/vectors.S arch/switch.S \
-	core/main.c core/console.c core/platform.c core/trap.c core/syscall.c core/demos.c \
-	drivers/pl011.c drivers/gic.c drivers/timer.c fdt/fdt.c \
+	arch/aarch64/boot.S arch/aarch64/vectors.S arch/aarch64/switch.S \
+	arch/aarch64/cpu.c arch/aarch64/trap.c arch/aarch64/mmu.c \
+	core/main.c core/console.c core/clock.c core/platform.c core/syscall.c core/demos.c \
+	drivers/serial.c drivers/pl011.c drivers/gic.c drivers/timer.c fdt/fdt.c \
 	lib/kstring.c lib/kprintf.c lib/esr.c lib/chainproto.c \
-	mm/buddy.c mm/kheap.c mm/mm.c mm/mmu.c \
+	mm/buddy.c mm/kheap.c mm/mm.c \
 	sched/runqueue.c sched/sched.c sched/sync.c \
 	shell/shell.c shell/shell_parse.c user/user_prog.c)
 CSRC := chainloader/boot.S chainloader/main.c kernel/lib/chainproto.c
@@ -41,7 +43,7 @@ CFLAGS_COMMON := -std=gnu11 -O2 -g -ffreestanding -fno-builtin -fno-stack-protec
 	-fno-pic -fno-pie -fno-omit-frame-pointer -fno-unwind-tables \
 	-fno-asynchronous-unwind-tables -mgeneral-regs-only -mstrict-align \
 	-mno-outline-atomics -Wall -Wextra -Wno-unused-parameter \
-	-DTEXT_OFFSET=0x80000 -Ikernel/include
+	-DTEXT_OFFSET=0x80000 -Ikernel/arch/aarch64/include -Ikernel/include
 LDFLAGS := -nostdlib -static --build-id=none -z max-page-size=4096
 
 ifeq ($(BOARD),all)
@@ -74,7 +76,7 @@ $$($(1)_OUT)/chain_obj/%.o: %.S
 	@mkdir -p $$(dir $$@)
 	$$(CC) $$($(1)_CFL) -c $$< -o $$@
 
-$$($(1)_OUT)/kernel.ld: kernel/arch/linker.ld.S
+$$($(1)_OUT)/kernel.ld: kernel/arch/aarch64/linker.ld.S
 	@mkdir -p $$(dir $$@)
 	$$(CC) -E -P -undef -x c -DKERNEL_BASE=$$($(1)_KERNEL_BASE) $$< -o $$@
 $$($(1)_OUT)/chainloader.ld: chainloader/linker.ld.S
